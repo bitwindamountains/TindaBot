@@ -12,6 +12,8 @@ The new same-origin seller workspace includes Overview, Orders, Inventory, and A
 
 The [feature review](FEATURE_REVIEW.md) records completed workflow improvements and prioritized remaining feature gaps. Payment follow-up, stock triage and adjustment previews, and actionable automation diagnostics are included in this revision.
 
+The subsequent [checkpoint review](FOLLOW_UP_REVIEW.md) identifies unresolved erasure delivery checks, visibility of older unfinished orders, catalog/command failure coupling, and navigation context. Address the P1 findings before public launch; the validation below predates those fixes.
+
 The original [production review](PRODUCTION_PLAN.md) remains the design baseline. Its statement that no code exists describes the earlier review, not the current workspace.
 
 Key scope decisions made during implementation:
