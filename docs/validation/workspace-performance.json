@@ -1,0 +1,13 @@
+{
+  "scope": "One localhost Chromium sample, 390x844 viewport, 4x CPU slowdown; includes test-runner latency; not a physical mobile or network test",
+  "dom_content_loaded_ms": 171.20000004768372,
+  "transferred_bytes": 35245,
+  "long_tasks": [
+    {
+      "start_ms": 86.70000004768372,
+      "duration_ms": 395
+    }
+  ],
+  "horizontal_overflow": false,
+  "inventory_interaction_ms": 178.81590000000006
+}

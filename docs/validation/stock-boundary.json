@@ -1,0 +1,7 @@
+{
+  "date": "2026-10-07",
+  "max_negative_adjustment": 1000000,
+  "excessive_removal_rejected": true,
+  "limit_value_accepted": true,
+  "server_writes": false
+}

@@ -1,0 +1,1 @@
+"""TindaBot ordering service."""

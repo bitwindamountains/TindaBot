@@ -1,0 +1,31 @@
+{
+  "date": "2026-10-07",
+  "version": "0.1.0",
+  "status": "Locally verified staging deployment candidate; external launch gates remain",
+  "artifacts": [
+    {
+      "file": "tindabot-0.1.0-py3-none-any.whl",
+      "bytes": 431998,
+      "sha256": "ae6d28db32e191cfd7b716f30223ba38832eb997c4c0db7708460ef95f1f6f6e",
+      "files": 33
+    },
+    {
+      "file": "tindabot-0.1.0.tar.gz",
+      "bytes": 541703,
+      "sha256": "00b0be2e2fbd87ddbb84bc036bedd404cf0307b00089c9ff01521735ccf52302",
+      "files": 79
+    }
+  ],
+  "backend_tests": 64,
+  "postgres_tests": 7,
+  "browser_workflows": 17,
+  "private_runtime_files_excluded": true,
+  "installed_wheel_smoke": true,
+  "remote_ci_run": false,
+  "container_run_locally": false,
+  "publicly_deployed": false,
+  "frontend_revision": "Payment follow-up and CSV, stock triage and adjustment preview, automation diagnostics, live order-date contract fix",
+  "workspace_api_tests": 4,
+  "backend_baseline_date": "2026-10-04",
+  "stock_adjustment_boundary_check": true
+}

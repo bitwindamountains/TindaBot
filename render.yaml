@@ -1,0 +1,37 @@
+# Review paid plans and configure shared secrets before applying this Blueprint.
+services:
+  - type: web
+    name: tindabot-api
+    runtime: python
+    region: singapore
+    plan: 0.5c-512mb
+    buildCommand: pip install uv==0.12.21 && uv sync --frozen --no-dev
+    preDeployCommand: uv run --no-sync alembic upgrade head
+    startCommand: uv run --no-sync uvicorn tindabot.main:create_app --factory --host 0.0.0.0 --port $PORT --no-access-log
+    healthCheckPath: /readyz
+    autoDeployTrigger: "off"
+    envVars:
+      - fromGroup: tindabot-production
+  - type: worker
+    name: tindabot-worker
+    runtime: python
+    region: singapore
+    plan: 0.5c-512mb
+    buildCommand: pip install uv==0.12.21 && uv sync --frozen --no-dev
+    startCommand: uv run --no-sync tindabot worker
+    autoDeployTrigger: "off"
+    envVars:
+      - fromGroup: tindabot-production
+
+envVarGroups:
+  - name: tindabot-production
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.10
+      - key: APP_ENV
+        value: production
+      - key: DELIVERY_MODE
+        value: live
+      # Configure all secrets, SHOP_NAME, PRIVACY_URL, DATABASE_URL and
+      # PRODUCTION_ACKNOWLEDGED manually in this shared group before deployment.
+      # Render ignores sync:false entries inside environment groups.

@@ -1,0 +1,12 @@
+{
+  "date": "2026-10-04",
+  "environment": "Windows, Python 3.12.10, PostgreSQL 17.6 bound to localhost",
+  "command": "uv run pytest -q --cov=tindabot --cov-report=term-missing",
+  "passed": 64,
+  "failed": 0,
+  "skipped": 0,
+  "postgres_tests": 7,
+  "coverage_percent": 77,
+  "warnings": ["Third-party Starlette TestClient deprecates its httpx test transport"],
+  "provider_testing": "Mocks only; no live external sends"
+}

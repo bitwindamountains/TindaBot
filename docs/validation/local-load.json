@@ -1,0 +1,17 @@
+{
+  "environment": "local PostgreSQL, localhost HTTP, dry-run providers",
+  "target_rate_per_second": 10,
+  "duration_seconds": 600,
+  "events_sent": 6000,
+  "http_errors": [],
+  "ack_p95_seconds": 0.03200000000651926,
+  "ack_max_seconds": 1.75,
+  "sampled_max_inbox_age_seconds": 10.840404510498047,
+  "inbox_states": {
+    "done": 6000
+  },
+  "outbox_states": {
+    "dry_run": 6000
+  },
+  "pass": true
+}

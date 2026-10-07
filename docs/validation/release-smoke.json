@@ -1,0 +1,23 @@
+{
+  "installed_wheel": true,
+  "migrations": "0002",
+  "web_assets_verified": [
+    "studio.css",
+    "motion.js",
+    "tokens.css",
+    "workspace.css",
+    "theme.js",
+    "app.js",
+    "icons.js",
+    "demo.js",
+    "favicon.svg",
+    "effects/hero.js",
+    "effects/hero.js.LEGAL.txt",
+    "effects/THIRD_PARTY_NOTICES.txt"
+  ],
+  "public_shell": true,
+  "authenticated_snapshot": true,
+  "diagnostic_contract_verified": true,
+  "providers_called": false,
+  "scope": "Installed wheel and migrations in isolated local Python environment; not container or hosting validation"
+}

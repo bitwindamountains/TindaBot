@@ -1,0 +1,66 @@
+name: verify
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: tindabot
+          POSTGRES_PASSWORD: test-only
+          POSTGRES_DB: tindabot_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U tindabot"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql+psycopg://tindabot:test-only@localhost:5432/tindabot_test
+      APP_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.12.21"
+          python-version: "3.12"
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run pytest --cov=tindabot --cov-report=term-missing
+      - run: uv run pip-audit --skip-editable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - run: npm run build:effects
+      - run: npm audit --audit-level=moderate
+      - run: uv build
+      - name: Verify installed release wheel
+        shell: bash
+        run: |
+          UV_PROJECT_ENVIRONMENT=.tools/release-venv uv sync --frozen --no-dev --no-install-project
+          uv pip install --python .tools/release-venv/bin/python --no-deps dist/*.whl
+          .tools/release-venv/bin/python scripts/smoke_release.py
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:ui
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: workspace-browser-evidence
+          path: |
+            docs/validation/workspace-*.png
+            docs/validation/ui-tests.json
+            test-results/
+      - name: Build container and check PostgreSQL readiness
+        shell: bash
+        run: |
+          docker build --tag tindabot:ci .
+          docker run --rm --network host -e APP_ENV=test -e DATABASE_URL="$TEST_DATABASE_URL" tindabot:ci .venv/bin/alembic upgrade head
+          docker run --detach --rm --name tindabot-smoke --network host -e APP_ENV=test -e DATABASE_URL="$TEST_DATABASE_URL" tindabot:ci
+          trap 'docker stop tindabot-smoke' EXIT
+          curl --fail --retry 10 --retry-delay 1 --retry-connrefused http://127.0.0.1:8000/readyz
+          curl --fail http://127.0.0.1:8000/ --output /dev/null
+          curl --fail http://127.0.0.1:8000/assets/app.js --output /dev/null
