@@ -14,11 +14,36 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import Integer, and_, cast, func, or_, select
 
-from tindabot.db import Inbox, Order, Outbox, Product, Record
+from tindabot.db import Inbox, Order, OrderActivity, Outbox, Product, Record
+from tindabot.orders import refund_total
 
 WEB = Path(__file__).with_name("web")
 DAY = 86_400
 MANILA_OFFSET = 28_800
+
+
+def activity_page(session, order_id, before=None):
+    query = select(OrderActivity).where(OrderActivity.order_id == order_id)
+    if before is not None:
+        query = query.where(OrderActivity.id < before)
+    events = session.scalars(query.order_by(OrderActivity.id.desc()).limit(51)).all()
+    return {
+        "activity": [
+            {
+                "id": e.id,
+                "kind": e.kind,
+                "actor": e.actor,
+                "version": e.order_version,
+                "created_at": e.created_at,
+                "occurred_at": e.occurred_at,
+                "body": e.body,
+                "amount_minor": e.amount_minor,
+                "data": e.data,
+            }
+            for e in events[:50]
+        ],
+        "next_activity_cursor": events[49].id if len(events) > 50 else None,
+    }
 
 
 def register_workspace(app, db, settings, operator):
@@ -48,7 +73,7 @@ def register_workspace(app, db, settings, operator):
         days: int = Query(default=7, ge=1, le=30),
         scope: Literal["period", "all", "open"] = "period",
         status: Literal["all", "pending", "confirmed", "shipped", "delivered", "cancelled"] = "all",
-        payment: Literal["all", "unpaid", "paid", "refund_required"] = "all",
+        payment: Literal["all", "unpaid", "paid", "refund_required", "refunded"] = "all",
         sort: Literal["newest", "oldest", "highest", "lowest"] = "newest",
         q: str = Query(default="", max_length=200),
         cursor: str | None = Query(default=None, max_length=2048),
@@ -247,4 +272,17 @@ def register_workspace(app, db, settings, operator):
                 "payment_status": order.payment_status,
                 "version": order.version,
                 "created_at": order.created_at,
+                "anonymized": order.anonymized,
+                "refunded_minor": refund_total(session, order.id),
+                **activity_page(session, order.id),
             }
+
+    @app.get("/admin/workspace/orders/{order_id}/activity", dependencies=[Depends(operator)])
+    def order_activity(
+        order_id: str, response: Response, before: int | None = Query(default=None, ge=1)
+    ):
+        response.headers["Cache-Control"] = "no-store"
+        with db.sessions() as session:
+            if not session.get(Order, order_id):
+                raise HTTPException(404, "Order not found")
+            return activity_page(session, order_id, before)

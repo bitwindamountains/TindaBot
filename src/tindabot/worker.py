@@ -9,9 +9,19 @@ from sqlalchemy.orm import aliased
 
 from tindabot.catalog import import_catalog
 from tindabot.config import Settings
-from tindabot.db import Conversation, Database, Inbox, Order, Outbox, Record, enqueue, insert_once
+from tindabot.db import (
+    Conversation,
+    Database,
+    Inbox,
+    Order,
+    OrderActivity,
+    Outbox,
+    Record,
+    enqueue,
+    insert_once,
+)
 from tindabot.integrations import DeliveryError, Integrations
-from tindabot.orders import OrderConflict, change_status
+from tindabot.orders import OrderConflict, change_status, record_activity
 from tindabot.service import process_one
 
 log = logging.getLogger("tindabot")
@@ -173,7 +183,15 @@ def maintenance(db, settings, now=None):
             .order_by(Order.id)
             .with_for_update()
         ):
-            change_status(session, order.id, order.version, "cancelled", f"expiry-{order.id}", now)
+            change_status(
+                session,
+                order.id,
+                order.version,
+                "cancelled",
+                f"expiry-{order.id}",
+                now,
+                actor="system",
+            )
         for conversation in session.scalars(
             select(Conversation)
             .where(
@@ -192,6 +210,10 @@ def maintenance(db, settings, now=None):
             order.details = {k: v for k, v in order.details.items() if k in {"delivery", "payment"}}
             order.anonymized = True
             order.version += 1
+            session.execute(
+                update(OrderActivity).where(OrderActivity.order_id == order.id).values(body=None)
+            )
+            record_activity(session, order, "retention", "system", now)
             enqueue(session, key=f"retention:{order.id}", destination="sheets", order=order.id)
         # Keep idempotency metadata; remove raw personal text independently.
         session.execute(
@@ -281,7 +303,15 @@ def sync_seller(db, settings, integrations, now=None):
                                 Record(key=key, value={"action": action, "order_id": order_id})
                             )
                     else:
-                        change_status(session, order_id, int(version), action, command_id, now)
+                        change_status(
+                            session,
+                            order_id,
+                            int(version),
+                            action,
+                            command_id,
+                            now,
+                            actor="seller_sheet",
+                        )
                 result = "accepted"
             except (OrderConflict, ValueError) as exc:
                 result = "rejected:" + (

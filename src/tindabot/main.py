@@ -14,7 +14,7 @@ from tindabot.catalog import CatalogImport, adjust_stock, import_catalog
 from tindabot.config import Settings
 from tindabot.db import Conversation, Database, Inbox, Outbox, Record, insert_once
 from tindabot.events import accept_events, valid_signature
-from tindabot.orders import OrderConflict, change_status
+from tindabot.orders import OrderConflict, apply_order_action, change_status
 
 
 class StatusCommand(BaseModel):
@@ -28,6 +28,20 @@ class StockCommand(BaseModel):
     command_id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,80}$")
     sku: str = Field(max_length=64)
     delta: int = Field(ge=-1_000_000, le=1_000_000)
+
+
+class NoteCommand(BaseModel):
+    command_id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,80}$")
+    expected_version: int = Field(ge=1)
+    body: str = Field(min_length=1, max_length=2000)
+
+
+class RefundCommand(BaseModel):
+    command_id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,80}$")
+    expected_version: int = Field(ge=1)
+    amount_minor: int = Field(strict=True, ge=1, le=2_000_000_000)
+    reference: str = Field(default="", max_length=160)
+    completed_at: float | None = Field(default=None, ge=0, allow_inf_nan=False)
 
 
 class Toggle(BaseModel):
@@ -87,7 +101,7 @@ def create_app(settings=None, database=None):
             with db.sessions() as session:
                 revision = session.scalar(text("SELECT version_num FROM alembic_version"))
                 session.scalar(select(Inbox.id).limit(1))
-                if revision != "0002":
+                if revision != "0003":
                     raise HTTPException(503, "Schema not ready")
             return {"status": "ready"}
         except SQLAlchemyError as exc:
@@ -179,6 +193,38 @@ def create_app(settings=None, database=None):
                     command.expected_version,
                     command.status,
                     command.command_id,
+                )
+        except OrderConflict as exc:
+            raise HTTPException(409, str(exc)) from exc
+
+    @app.post("/admin/orders/{order_id}/notes", dependencies=[Depends(operator)])
+    def add_note(order_id: str, command: NoteCommand):
+        try:
+            with db.sessions.begin() as session:
+                return apply_order_action(
+                    session,
+                    order_id,
+                    command.expected_version,
+                    command.command_id,
+                    "note",
+                    command.body,
+                )
+        except OrderConflict as exc:
+            raise HTTPException(409, str(exc)) from exc
+
+    @app.post("/admin/orders/{order_id}/refunds", dependencies=[Depends(operator)])
+    def record_refund(order_id: str, command: RefundCommand):
+        try:
+            with db.sessions.begin() as session:
+                return apply_order_action(
+                    session,
+                    order_id,
+                    command.expected_version,
+                    command.command_id,
+                    "refund",
+                    command.reference,
+                    amount_minor=command.amount_minor,
+                    occurred_at=command.completed_at,
                 )
         except OrderConflict as exc:
             raise HTTPException(409, str(exc)) from exc

@@ -12,7 +12,7 @@ A Messenger ordering service for one Facebook Page: product browsing, Taglish FA
 - Separate API and worker processes; transactional outbox, independent destination retries, ordered jobs, uncertain-delivery review, and stale reply/window checks.
 - Sheet catalog import, order projection using raw cell values, an explicit Commands tab for seller status changes, and seller email containing minimal customer data.
 - Operator credentials distinct from status credentials, global automation switch, human takeover, privacy field erasure, retention, health checks, migrations, CI, and backup tooling.
-- Responsive seller workspace at `/`: light/dark themes, order overview and detail, status changes, stock adjustments, CSV export, and automation controls. The public shell shows labeled sample data until an operator connects.
+- Responsive seller workspace at `/`: light/dark themes, order overview and detail, status changes, private order notes/history, external-refund tracking, stock adjustments, CSV export, and automation controls. The public shell shows labeled sample data until an operator connects.
 
 No customer messages or emails are sent in the default `dry_run` mode. Dry-run jobs are recorded as `dry_run`, never as delivered. They are not automatically replayed when switching to live mode.
 

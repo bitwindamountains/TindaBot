@@ -1,6 +1,6 @@
 {
   "installed_wheel": true,
-  "migrations": "0002",
+  "migrations": "0003",
   "web_assets_verified": [
     "studio.css",
     "motion.js",
@@ -19,6 +19,7 @@
   "authenticated_snapshot": true,
   "diagnostic_contract_verified": true,
   "all_time_queue_contract_verified": true,
+  "notes_refund_and_activity_verified": true,
   "providers_called": false,
   "scope": "Installed wheel and migrations in isolated local Python environment; not container or hosting validation"
 }

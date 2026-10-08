@@ -1,9 +1,10 @@
 import hashlib
 import time
 
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, update
 
-from tindabot.db import Conversation, Inbox, Order, Outbox, Record, enqueue
+from tindabot.db import Conversation, Inbox, Order, OrderActivity, Outbox, Record, enqueue
+from tindabot.orders import record_activity
 
 
 def erase_customer(session, conversation_key, now=None):
@@ -52,6 +53,10 @@ def erase_customer(session, conversation_key, now=None):
         order.details = {k: v for k, v in order.details.items() if k in {"delivery", "payment"}}
         order.anonymized = True
         order.version += 1
+        session.execute(
+            update(OrderActivity).where(OrderActivity.order_id == order.id).values(body=None)
+        )
+        record_activity(session, order, "erased", "operator", now)
         enqueue(
             session, key=f"erasure:{order.id}:{order.version}", destination="sheets", order=order.id
         )

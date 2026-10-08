@@ -107,6 +107,24 @@ class Outbox(Base):
     __table_args__ = (Index("ix_outbox_due", "status", "next_attempt", "id"),)
 
 
+class OrderActivity(Base):
+    __tablename__ = "order_activity"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    order_id: Mapped[str] = mapped_column(ForeignKey("orders.id"))
+    kind: Mapped[str] = mapped_column(String(24))
+    actor: Mapped[str] = mapped_column(String(24))
+    order_version: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[float] = mapped_column(Float, default=time.time)
+    occurred_at: Mapped[float] = mapped_column(Float)
+    body: Mapped[str | None] = mapped_column(Text)
+    amount_minor: Mapped[int | None] = mapped_column(Integer)
+    data: Mapped[dict] = mapped_column(JSON, default=dict)
+    __table_args__ = (
+        Index("ix_activity_order_id", "order_id", "id"),
+        CheckConstraint("amount_minor IS NULL OR amount_minor > 0"),
+    )
+
+
 class Record(Base):
     """Versioned catalog snapshot, command idempotency, audits and worker heartbeat."""
 

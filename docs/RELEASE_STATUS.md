@@ -14,6 +14,8 @@ The [feature review](FEATURE_REVIEW.md) records completed workflow improvements 
 
 The four findings from the [checkpoint review](FOLLOW_UP_REVIEW.md) are fixed: erasure coordinates with order-linked delivery claims, unfinished orders remain discoverable across all dates with paginated search/export, catalog failures no longer block seller commands, and navigation retains working context in tab memory.
 
+Private order notes, paged activity history and partial/full external-refund reconciliation are now included. Notes and refund references are scrubbed by erasure/retention. This release requires schema `0003`; see [journal behavior and rollout](ORDER_JOURNAL.md).
+
 The original [production review](PRODUCTION_PLAN.md) remains the design baseline. Its statement that no code exists describes the earlier review, not the current workspace.
 
 Key scope decisions made during implementation:
@@ -28,12 +30,12 @@ Key scope decisions made during implementation:
 ## Validation evidence
 
 - Python 3.12 local test suite includes real PostgreSQL 17 tests for concurrent first deliveries, competing purchases, repeated confirmations, row locking, queue claims, migrations, and repeated seller commands.
-- Latest full run: **78 tests passed, no skips**, including ten PostgreSQL tests and an HTTP API/worker subprocess restart test. Coverage is 78%. The PostgreSQL cases include Manila date grouping, customer-name search and both claim/erasure interleavings. [JUnit evidence](validation/follow-up-backend-tests.xml).
+- Latest full run: **92 tests passed, no skips**, including thirteen PostgreSQL tests and an HTTP API/worker subprocess restart test. Coverage is 80%. The PostgreSQL cases include Manila date grouping, customer-name search and both claim/erasure interleavings, concurrent refund retries/competing commands, and private activity-table grants. [JUnit evidence](validation/journal-backend-tests.xml).
 - The latest full suite includes the earlier timestamp/diagnostic regressions plus older-order visibility, filtered cursor paging, tie ordering, insertion boundaries and preservation of dashboard totals.
-- Nineteen Chromium browser workflows cover order progression, inventory, automation, complete filtered CSV export, connection/error/loading states, light/dark accessibility, keyboard operation, 320/390px layouts, retained idempotency IDs on live-API retries using mock responses, chart exploration, order sorting, glass quick actions, and ambient motion controls. They also verify Back/Forward context and privacy, connected pagination, server search, and restoration of loaded pages. Additional checks exercise real WebGL drawing/pause, refresh preservation, canvas disposal, context loss, and no-download fallbacks. Automated axe checks reported no A/AA violations in the tested views; this is not a blanket accessibility certification. [Browser evidence](validation/ui-tests.json).
+- Twenty-one Chromium browser workflows cover order progression, inventory, automation, complete filtered CSV export, connection/error/loading states, light/dark accessibility, keyboard operation, 320/390px layouts, retained idempotency IDs on live-API retries using mock responses, chart exploration, order sorting, glass quick actions, and ambient motion controls. The journal cases verify private notes, partial-to-full refunds, queue clearing, safe text rendering and retained command IDs after a failed response. They also verify Back/Forward context and privacy, connected pagination, server search, and restoration of loaded pages. Additional checks exercise real WebGL drawing/pause, refresh preservation, canvas disposal, context loss, and no-download fallbacks. Automated axe checks reported no A/AA violations in the tested views; this is not a blanket accessibility certification. [Browser evidence](validation/ui-tests.json).
 - Ten-minute localhost soak completed at **10 events/second: 6,000 accepted and processed events, 6,000 dry-run replies, zero HTTP errors, and 32 ms p95 acknowledgement latency**. Maximum acknowledgement was 1.75 seconds; maximum sampled inbox age was 10.84 seconds during concurrent local test activity. The queue fully drained. This establishes local durable intake behavior, not hosted or real-provider reply latency. [Raw load report](validation/local-load.json).
 - Python and npm dependency audits report no known vulnerabilities in the checked dependency sets.
-- Wheel and source distribution build successfully. An isolated environment installed the wheel and verified migrations, readiness, static assets, authenticated snapshots, and unauthorized access rejection without source imports or provider calls. [Installed-wheel smoke report](validation/release-smoke.json).
+- Wheel and source distribution build successfully. An isolated environment installed the wheel and verified migration `0003`, readiness, static assets, authenticated snapshots, private notes/refund history and unauthorized access rejection without source imports or provider calls. [Installed-wheel smoke report](validation/release-smoke.json).
 - Full simulated checkout produced one PHP 440.00 order after two distinct confirmation events; inventory was allocated once and provider jobs queued without external sends.
 - A custom-format PostgreSQL backup restored into a separate database; catalog row count and migration version were verified. This local drill does not establish hosted RPO/RTO or off-site backup coverage.
 - Provider adapter tests use HTTP mocks and fake Sheets. No live Meta, Google Sheets, or SMTP acceptance test has been performed.
@@ -43,7 +45,7 @@ Key scope decisions made during implementation:
 
 Code coverage is diagnostic, not evidence that every operational gate has passed. The provider adapters still need actual account acceptance tests.
 
-Browser run detail: 18 workflows passed in the latest full run; the software-WebGL workflow exceeded its two-minute overall allowance after its draw/pause assertions. With a four-minute overall allowance and unchanged individual rendering assertions, the isolated retry passed in 33.4 seconds. Both the [full run](validation/ui-tests.json) and [shader retry](validation/shader-follow-up.json) are retained; this is not a physical-device performance guarantee.
+Latest browser run: all 21 workflows passed, including the real software-WebGL test with its four-minute overall allowance. The journal workflows were checked again after the final typography adjustment. The initial concurrent backend run had PostgreSQL timeouts during software rendering; the isolated full backend rerun passed all 92 cases with no skips. These local checks are not a hosted or physical-device performance guarantee.
 
 ## Remaining launch gates
 
