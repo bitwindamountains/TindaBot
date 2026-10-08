@@ -12,7 +12,7 @@ from sqlalchemy.engine import make_url
 
 from tindabot.catalog import CatalogImport, import_catalog
 from tindabot.cli import DEMO
-from tindabot.db import Conversation, Database, Inbox, Order, Outbox, Product
+from tindabot.db import Conversation, Database, Inbox, Order, Outbox, Product, Record
 from tindabot.events import accept_events
 from tindabot.main import create_app
 from tindabot.service import process_one
@@ -299,3 +299,48 @@ def test_new_activity_table_is_not_granted_to_public(pgdb):
         """)
         ).all()
         assert grants == []
+
+
+@pytest.mark.parametrize("same_command", [True, False])
+def test_concurrent_delivery_recovery_has_one_audit(pgdb, settings, same_command):
+    from fastapi.testclient import TestClient
+
+    from tindabot.main import create_app
+
+    with pgdb.sessions.begin() as session:
+        job = Outbox(
+            business_key="recover-race",
+            lane="email",
+            destination="email",
+            status="uncertain",
+            attempts=2,
+        )
+        session.add(job)
+        session.flush()
+        job_id = job.id
+    headers = {"Authorization": "Bearer " + "a" * 40}
+    with TestClient(create_app(settings, pgdb)) as client:
+        job = client.get("/admin/workspace/jobs", headers=headers).json()["jobs"][0]
+
+        def resolve(index):
+            return client.post(
+                f"/admin/jobs/{job_id}/resolve",
+                headers=headers,
+                json={
+                    "action": "retry",
+                    "accept_duplicate_risk": True,
+                    "expected_revision": job["revision"],
+                    "command_id": "same" if same_command else f"different-{index}",
+                },
+            ).status_code
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(resolve, range(2)))
+    assert sorted(results) == ([200, 200] if same_command else [200, 409])
+    with pgdb.sessions() as session:
+        assert (
+            session.scalar(
+                select(func.count()).select_from(Record).where(Record.key.like("audit:%"))
+            )
+            == 1
+        )

@@ -15,6 +15,7 @@ from tindabot.config import Settings
 from tindabot.db import Conversation, Database, Inbox, Outbox, Record, insert_once
 from tindabot.events import accept_events, valid_signature
 from tindabot.orders import OrderConflict, apply_order_action, change_status
+from tindabot.recovery import revision
 
 
 class StatusCommand(BaseModel):
@@ -51,6 +52,8 @@ class Toggle(BaseModel):
 class Replay(BaseModel):
     action: str = Field(pattern=r"^(retry|suppress)$")
     accept_duplicate_risk: bool = False
+    command_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,80}$")
+    expected_revision: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
 
 
 def create_app(settings=None, database=None):
@@ -255,9 +258,21 @@ def create_app(settings=None, database=None):
     @app.post("/admin/jobs/{job_id}/resolve", dependencies=[Depends(operator)])
     def resolve(job_id: int, command: Replay):
         with db.sessions.begin() as session:
+            receipt = None
+            fingerprint = {"job_id": job_id, **command.model_dump(exclude={"command_id"})}
+            if command.command_id:
+                key = f"recovery:{command.command_id}"
+                if not insert_once(session, Record, {"key": key, "value": {}}, "key"):
+                    receipt = session.get(Record, key)
+                    if receipt.value.get("request") != fingerprint:
+                        raise HTTPException(409, "Recovery command was already used")
+                    return receipt.value["result"]
+                receipt = session.get(Record, key)
             job = session.scalar(select(Outbox).where(Outbox.id == job_id).with_for_update())
             if not job or job.status not in {"failed", "uncertain"}:
                 raise HTTPException(409, "Job is not awaiting resolution")
+            if command.expected_revision and command.expected_revision != revision(job):
+                raise HTTPException(409, "Job changed; refresh delivery review")
             if (
                 command.action == "retry"
                 and job.status == "uncertain"
@@ -269,11 +284,20 @@ def create_app(settings=None, database=None):
             session.add(
                 Record(
                     key=f"audit:{time.time_ns()}",
-                    value={"job_id": job_id, "action": command.action, "prior": job.status},
+                    value={
+                        "job_id": job_id,
+                        "action": command.action,
+                        "prior": job.status,
+                        "actor": "operator",
+                        "attempts": job.attempts,
+                        "accept_duplicate_risk": command.accept_duplicate_risk,
+                    },
                 )
             )
             job.status = "pending" if command.action == "retry" else "suppressed"
             job.attempts, job.next_attempt, job.error = 0, 0, None
+            if receipt:
+                receipt.value = {"request": fingerprint, "result": {"success": True}}
         return {"success": True}
 
     @app.post("/admin/conversations/{psid}/erase", dependencies=[Depends(operator)])

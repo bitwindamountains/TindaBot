@@ -4,7 +4,9 @@ Reviewed 7 October 2026. Scope: the seller workspace and the API contracts it us
 
 Updated 8 October: the four checkpoint findings are fixed; see [resolution and regression evidence](FOLLOW_UP_REVIEW.md). All-time order search, cursor pagination, complete connected CSV exports and tab-memory navigation context are now included.
 
-The next seller increment is also implemented: [private order notes, activity history and external-refund reconciliation](ORDER_JOURNAL.md), including partial refunds, version checks, idempotent retries and privacy scrubbing.
+The order journal increment is implemented: [private order notes, activity history and external-refund reconciliation](ORDER_JOURNAL.md), including partial refunds, version checks, idempotent retries and privacy scrubbing.
+
+Delivery recovery is now implemented: [protected inspection, safe retry/suppression and audit records](DELIVERY_RECOVERY.md).
 
 ## Changes completed
 
@@ -23,7 +25,6 @@ Payment verification records an operator's confirmation; it does not charge a cu
 | Priority | Gap | Concrete next increment / acceptance criteria |
 | --- | --- | --- |
 | P2 | Date selection offers All dates, Needs attention and 7/30-day reporting scopes; product browsing is still limited to 500 records. | Add custom date ranges and product pagination/search. Order pagination, server search and complete selected-result export are implemented. |
-| P1 | Diagnostics describe problems; reconciliation still needs the operator runbook. | Add a protected job inspection screen with bounded, redacted error details. Retrying an uncertain result needs an explicit duplicate-delivery acknowledgement and an audit record. |
 | P1 | Real Meta, Sheets, SMTP, and hosted deployment acceptance are outstanding. | Run the documented staging and supervised-seller checks with the actual accounts. A heartbeat alone must never be presented as end-to-end delivery success. |
 | P2 | Product creation, catalog import, and availability edits depend on the seller Sheet/API. | Build an import preview showing valid rows, row errors, and stock effects before applying. Preserve the existing atomic catalog rules. |
 | P2 | One operator credential is shared by the workspace. | Before adding staff, introduce individual sessions, role checks, revocation, and attributable audit events. Do not add cosmetic role selectors without server enforcement. |

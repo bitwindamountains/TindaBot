@@ -16,6 +16,7 @@ from sqlalchemy import Integer, and_, cast, func, or_, select
 
 from tindabot.db import Inbox, Order, OrderActivity, Outbox, Product, Record
 from tindabot.orders import refund_total
+from tindabot.recovery import inspect_job
 
 WEB = Path(__file__).with_name("web")
 DAY = 86_400
@@ -47,6 +48,25 @@ def activity_page(session, order_id, before=None):
 
 
 def register_workspace(app, db, settings, operator):
+    @app.get("/admin/workspace/jobs", dependencies=[Depends(operator)])
+    def delivery_jobs(
+        response: Response,
+        status: Literal["all", "failed", "uncertain"] = "all",
+        before: int | None = Query(default=None, ge=1),
+    ):
+        response.headers["Cache-Control"] = "no-store"
+        query = select(Outbox).where(Outbox.status.in_(["failed", "uncertain"]))
+        if status != "all":
+            query = query.where(Outbox.status == status)
+        if before is not None:
+            query = query.where(Outbox.id < before)
+        with db.sessions() as session:
+            jobs = session.scalars(query.order_by(Outbox.id.desc()).limit(51)).all()
+            return {
+                "jobs": [inspect_job(job) for job in jobs[:50]],
+                "next_cursor": jobs[49].id if len(jobs) > 50 else None,
+            }
+
     app.mount(
         "/assets",
         GZipMiddleware(StaticFiles(directory=WEB), minimum_size=1000),

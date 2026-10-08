@@ -8,6 +8,7 @@
     "workspace.css",
     "theme.js",
     "app.js",
+    "recovery.js",
     "icons.js",
     "demo.js",
     "favicon.svg",
@@ -20,6 +21,7 @@
   "diagnostic_contract_verified": true,
   "all_time_queue_contract_verified": true,
   "notes_refund_and_activity_verified": true,
+  "delivery_recovery_verified": true,
   "providers_called": false,
   "scope": "Installed wheel and migrations in isolated local Python environment; not container or hosting validation"
 }

@@ -447,3 +447,8 @@ tbody tr:hover td:first-child { box-shadow: inset 3px 0 var(--accent); }
   .health-totals strong { font-size: 1.75rem; }
   .catalog-caption { font-size: .6875rem; }
 }
+
+.recovery-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.recovery-list { margin-top: 24px; }
+.recovery-list .detail-section { border-bottom: 1px solid var(--border-subtle); padding-bottom: 20px; }
+.recovery-list p { overflow-wrap: anywhere; }
