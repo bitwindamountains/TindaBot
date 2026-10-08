@@ -241,3 +241,61 @@ def test_erasure_waits_for_claim_then_refuses_processing_job(pgdb, settings):
         event.remove(pgdb.engine, "before_cursor_execute", observe)
     with pgdb.sessions() as session:
         assert "name" in session.get(Order, order.id).details
+
+
+@pytest.mark.parametrize("same_command", [True, False])
+def test_concurrent_refund_records_cannot_double_the_balance(pgdb, settings, same_command):
+    from test_orders import confirm_order
+
+    from tindabot.db import OrderActivity
+    from tindabot.orders import OrderConflict, apply_order_action, change_status, refund_total
+
+    order = confirm_order(pgdb, settings)
+    with pgdb.sessions.begin() as session:
+        change_status(session, order.id, 1, "paid", "journal-paid")
+        change_status(session, order.id, 2, "cancelled", "journal-cancel")
+
+    def record(index):
+        try:
+            with pgdb.sessions.begin() as session:
+                return apply_order_action(
+                    session,
+                    order.id,
+                    3,
+                    "same-refund" if same_command else f"refund-{index}",
+                    "refund",
+                    "TEST-REFERENCE",
+                    amount_minor=26000,
+                )
+        except OrderConflict as exc:
+            return str(exc)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(record, range(2)))
+    if same_command:
+        assert results[0] == results[1]
+    else:
+        assert sum(isinstance(result, dict) for result in results) == 1
+        assert "version_conflict" in results
+    with pgdb.sessions() as session:
+        assert refund_total(session, order.id) == 26000
+        assert session.get(Order, order.id).payment_status == "refunded"
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(OrderActivity)
+                .where(OrderActivity.kind == "refund")
+            )
+            == 1
+        )
+
+
+def test_new_activity_table_is_not_granted_to_public(pgdb):
+    with pgdb.sessions() as session:
+        grants = session.execute(
+            text("""
+            SELECT privilege_type FROM information_schema.table_privileges
+            WHERE table_name = 'order_activity' AND grantee IN ('PUBLIC', 'anon', 'authenticated')
+        """)
+        ).all()
+        assert grants == []

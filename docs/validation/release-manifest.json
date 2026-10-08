@@ -5,34 +5,36 @@
   "artifacts": [
     {
       "file": "tindabot-0.1.0-py3-none-any.whl",
-      "bytes": 434756,
-      "sha256": "c21180957b712b695990ef4f6b1ccbd7d0330aef6da4ce7e2c970b3ec86bc341",
+      "bytes": 439815,
+      "sha256": "c4da986348337b21c6a180f0a65bdf54175f8db793962e24002abb853f02e0f1",
       "files": 33
     },
     {
       "file": "tindabot-0.1.0.tar.gz",
-      "bytes": 551579,
-      "sha256": "8e8df90f5e972095c421c062fd008b58d3088965f373590d8a1910d9c03c1379",
-      "files": 81
+      "bytes": 562957,
+      "sha256": "a95ee0db12e4cddbf3d19df6165642dd03d76fb2becd40e9edb15dd9fba76e91",
+      "files": 85
     }
   ],
-  "backend_tests": 78,
-  "postgres_tests": 10,
-  "browser_workflows": 19,
+  "backend_tests": 92,
+  "postgres_tests": 13,
+  "browser_workflows": 21,
   "private_runtime_files_excluded": true,
   "installed_wheel_smoke": true,
   "remote_ci_run": false,
   "container_run_locally": false,
   "publicly_deployed": false,
-  "frontend_revision": "All-time order queues, server filters and cursor paging, complete filtered export, private navigation context",
+  "frontend_revision": "Private order notes and activity timeline; partial/full external refund tracking with safe retries",
   "workspace_api_tests": 9,
-  "backend_baseline_date": "2026-10-07",
+  "backend_baseline_date": "2026-10-08",
   "stock_adjustment_boundary_check": true,
   "review_findings_fixed": 4,
   "browser_validation": {
-    "full_run_passed": 18,
-    "full_run_timeout": 1,
-    "isolated_shader_retry_passed": 1,
+    "full_run_passed": 21,
+    "full_run_timeout": 0,
+    "journal_follow_up_passed": 2,
     "shader_overall_allowance_seconds": 240
-  }
+  },
+  "schema_revision": "0003",
+  "journal_api_tests": 11
 }

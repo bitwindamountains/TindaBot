@@ -1,11 +1,13 @@
+import hashlib
+import json
 import secrets
 import time
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
-from tindabot.db import Order, Product, Record, enqueue, insert_once
+from tindabot.db import Order, OrderActivity, Product, Record, enqueue, insert_once
 
 
 class OrderConflict(ValueError):
@@ -78,6 +80,7 @@ def create_order(session, conversation, ctx, settings, now):
     )
     session.add(order)
     session.flush()
+    record_activity(session, order, "created", "customer", now)
     enqueue(session, key=f"sheet:{order.id}:1", destination="sheets", order=order.id)
     enqueue(session, key=f"email:{order.id}", destination="email", order=order.id)
     return order, False
@@ -92,7 +95,107 @@ ALLOWED = {
 }
 
 
-def change_status(session, order_id, expected_version, status, command_id, now=None):
+def record_activity(session, order, kind, actor, now, **fields):
+    event = OrderActivity(
+        order_id=order.id,
+        kind=kind,
+        actor=actor,
+        order_version=order.version,
+        created_at=now,
+        occurred_at=fields.pop("occurred_at", now),
+        **fields,
+    )
+    session.add(event)
+    return event
+
+
+def refund_total(session, order_id):
+    return session.scalar(
+        select(func.coalesce(func.sum(OrderActivity.amount_minor), 0)).where(
+            OrderActivity.order_id == order_id, OrderActivity.kind == "refund"
+        )
+    )
+
+
+def apply_order_action(
+    session,
+    order_id,
+    expected_version,
+    command_id,
+    kind,
+    body,
+    *,
+    amount_minor=None,
+    occurred_at=None,
+    now=None,
+):
+    """Append a private note or reconcile an external refund, never send money."""
+    now = time.time() if now is None else now
+    body = body.strip()
+    fingerprint = hashlib.sha256(
+        json.dumps([kind, order_id, body, amount_minor, occurred_at], ensure_ascii=False).encode()
+    ).hexdigest()
+    key = f"command:{command_id}"
+    if not insert_once(session, Record, {"key": key, "value": {}, "updated_at": now}, "key"):
+        prior = session.get(Record, key).value
+        if prior.get("fingerprint") != fingerprint:
+            raise OrderConflict("command_reused")
+        return prior["result"]
+    order = session.scalar(select(Order).where(Order.id == order_id).with_for_update())
+    if not order:
+        raise OrderConflict("not_found")
+    if order.version != expected_version:
+        raise OrderConflict("version_conflict")
+    fields = {}
+    if kind == "note":
+        if order.anonymized:
+            raise OrderConflict("notes_erased")
+        if not body or len(body) > 2000:
+            raise OrderConflict("invalid_note")
+        fields["body"] = body
+    elif kind == "refund":
+        if order.status != "cancelled" or order.payment_status != "refund_required":
+            raise OrderConflict("refund_unavailable")
+        refunded = refund_total(session, order.id)
+        if (
+            not isinstance(amount_minor, int)
+            or amount_minor <= 0
+            or amount_minor > order.total_minor - refunded
+        ):
+            raise OrderConflict("refund_exceeds_remaining")
+        if len(body) > 160 or (not order.anonymized and not body):
+            raise OrderConflict("refund_reference_required")
+        completed = now if occurred_at is None else occurred_at
+        if not order.created_at <= completed <= now:
+            raise OrderConflict("refund_date_invalid")
+        fields.update(
+            amount_minor=amount_minor,
+            occurred_at=completed,
+            body=None if order.anonymized else body,
+        )
+        if refunded + amount_minor == order.total_minor:
+            order.payment_status = "refunded"
+    else:
+        raise OrderConflict("invalid_action")
+    order.version += 1
+    event = record_activity(session, order, kind, "operator", now, **fields)
+    session.flush()
+    result = {
+        "order_id": order.id,
+        "activity_id": event.id,
+        "version": order.version,
+        "payment_status": order.payment_status,
+        "refunded_minor": refund_total(session, order.id),
+    }
+    session.get(Record, key).value = {"fingerprint": fingerprint, "result": result}
+    # Keep Sheet command versions current, without exporting private notes or references.
+    enqueue(session, key=f"sheet:{order.id}:{order.version}", destination="sheets", order=order.id)
+    return result
+
+
+def change_status(
+    session, order_id, expected_version, status, command_id, now=None, *, actor="operator"
+):
     now = now or time.time()
     key = f"command:{command_id}"
     # Reserve a globally unique command record before changing any order. Concurrent
@@ -108,6 +211,7 @@ def change_status(session, order_id, expected_version, status, command_id, now=N
         raise OrderConflict("not_found")
     if order.version != expected_version:
         raise OrderConflict("version_conflict")
+    previous = {"status": order.status, "payment_status": order.payment_status}
     if status == "paid":
         if order.status == "cancelled" or order.payment_status == "paid":
             raise OrderConflict("invalid_transition")
@@ -133,6 +237,17 @@ def change_status(session, order_id, expected_version, status, command_id, now=N
     else:
         raise OrderConflict("invalid_transition")
     order.version += 1
+    record_activity(
+        session,
+        order,
+        "status",
+        actor,
+        now,
+        data={
+            "before": previous,
+            "after": {"status": order.status, "payment_status": order.payment_status},
+        },
+    )
     result = {"order_id": order.id, "status": status, "version": order.version}
     session.get(Record, key).value = result
     enqueue(session, key=f"sheet:{order.id}:{order.version}", destination="sheets", order=order.id)

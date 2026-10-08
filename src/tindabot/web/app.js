@@ -1,5 +1,5 @@
 import {icon} from './icons.js';
-import {demoSnapshot, demoOrder, demoStatus, demoStock, demoAutomation} from './demo.js';
+import {demoSnapshot, demoOrder, demoStatus, demoStock, demoAutomation, demoNote, demoRefund} from './demo.js';
 import {heroBackdrop, observeScenes, toggleAmbient} from './motion.js';
 
 const $ = (s, root = document) => root.querySelector(s);
@@ -44,9 +44,10 @@ function updateOrderView(focus = null) {
   if (focus) $(focus)?.focus({preventScroll: true});
 }
 const dialog = $('#dialog');
-let toastTimer, modalOpener, modalVersion = 0;
+let toastTimer, modalOpener, modalVersion = 0, detailOrder = null;
+const disabledControls = new WeakMap();
 const isDemo = () => !state.token;
-const badge = (status) => `<span class="badge badge-${escape(status)}"><span class="dot"></span>${escape(({pending: 'Pending', confirmed: 'Confirmed', shipped: 'Shipped', delivered: 'Delivered', cancelled: 'Cancelled', paid: 'Paid', unpaid: 'Unpaid', refund_required: 'Refund required'})[status] || status)}</span>`;
+const badge = (status) => `<span class="badge badge-${escape(status)}"><span class="dot"></span>${escape(({pending: 'Pending', confirmed: 'Confirmed', shipped: 'Shipped', delivered: 'Delivered', cancelled: 'Cancelled', paid: 'Paid', unpaid: 'Unpaid', refund_required: 'Refund required', refunded: 'Refunded'})[status] || status)}</span>`;
 const button = (text, action, glyph = '', extra = '') => `<button class="button" data-action="${action}" ${extra}>${glyph ? icon(glyph) : ''}${text}</button>`;
 const initials = (name) => name.split(/\s+/).filter(Boolean).slice(0, 2).map(n => [...n][0]).join('');
 
@@ -176,7 +177,7 @@ function orderTable(compact) {
   const all = filteredOrders(compact ? 'newest' : state.sort), rows = compact ? all.slice(0, 5) : all;
   const filters = ['all', 'pending', 'confirmed', 'shipped', 'delivered', 'cancelled'];
   return `<section aria-labelledby="orders-title"><div class="section-heading"><h2 id="orders-title">${compact ? 'Recent orders' : 'Your orders'}<span class="count numeric">${all.length}</span></h2>${compact ? '<button class="button button-quiet" data-view="orders">View all orders '+icon('arrow')+'</button>' : button('Export CSV', 'export', 'download', !rows.length ? 'disabled' : '')}</div>
-    ${state.query && rows.length ? `<div class="search-context"><span>Results for <strong>“${escape(state.query)}”</strong></span><button class="text-button" data-action="clear-search">Clear search ${icon('close')}</button></div>` : ''}<div class="panel orders-panel"><div class="table-toolbar"><div class="filters" role="group" aria-label="Filter orders by status">${filters.map(f => `<button class="filter" data-filter="${f}" aria-pressed="${state.filter === f}">${f === 'all' ? 'All orders' : f[0].toUpperCase() + f.slice(1)}</button>`).join('')}</div>${compact ? '' : `<div class="order-tools"><label class="order-sort"><span>Show</span><select id="order-scope" aria-label="Order date scope">${[['all', 'All dates'], ['open', 'Needs attention'], ['period', 'Reporting period']].map(([value, label]) => `<option value="${value}" ${state.scope === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label><label class="order-sort"><span>Payment</span><select id="payment-filter" aria-label="Filter orders by payment">${[['all', 'All payments'], ['unpaid', 'Unpaid'], ['paid', 'Paid'], ['refund_required', 'Refund required']].map(([value, label]) => `<option value="${value}" ${state.payment === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label><label class="order-sort"><span>Sort</span><select id="order-sort" aria-label="Sort orders">${[['newest', 'Newest first'], ['oldest', 'Oldest first'], ['highest', 'Highest amount'], ['lowest', 'Lowest amount']].map(([value, label]) => `<option value="${value}" ${state.sort === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label></div>`}</div>
+    ${state.query && rows.length ? `<div class="search-context"><span>Results for <strong>“${escape(state.query)}”</strong></span><button class="text-button" data-action="clear-search">Clear search ${icon('close')}</button></div>` : ''}<div class="panel orders-panel"><div class="table-toolbar"><div class="filters" role="group" aria-label="Filter orders by status">${filters.map(f => `<button class="filter" data-filter="${f}" aria-pressed="${state.filter === f}">${f === 'all' ? 'All orders' : f[0].toUpperCase() + f.slice(1)}</button>`).join('')}</div>${compact ? '' : `<div class="order-tools"><label class="order-sort"><span>Show</span><select id="order-scope" aria-label="Order date scope">${[['all', 'All dates'], ['open', 'Needs attention'], ['period', 'Reporting period']].map(([value, label]) => `<option value="${value}" ${state.scope === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label><label class="order-sort"><span>Payment</span><select id="payment-filter" aria-label="Filter orders by payment">${[['all', 'All payments'], ['unpaid', 'Unpaid'], ['paid', 'Paid'], ['refund_required', 'Refund required'], ['refunded', 'Refunded']].map(([value, label]) => `<option value="${value}" ${state.payment === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label><label class="order-sort"><span>Sort</span><select id="order-sort" aria-label="Sort orders">${[['newest', 'Newest first'], ['oldest', 'Oldest first'], ['highest', 'Highest amount'], ['lowest', 'Lowest amount']].map(([value, label]) => `<option value="${value}" ${state.sort === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label></div>`}</div>
     ${rows.length ? `<div class="table-scroll" role="region" aria-label="Orders table" tabindex="0"><table><thead><tr><th scope="col">Order</th><th scope="col" class="customer-column">Customer</th><th scope="col">Status</th><th scope="col" class="date-column">Date</th><th scope="col" class="align-right">Amount</th></tr></thead><tbody>${rows.map(o => `<tr><td><button class="order-link numeric" data-order="${escape(o.id)}" aria-label="Open order ${escape(o.code)}">${escape(o.code)}</button><span class="mobile-customer">${escape(o.name)}</span></td><td class="customer-column"><div class="customer"><span class="avatar" aria-hidden="true">${escape(initials(o.name))}</span><span class="customer-name" title="${escape(o.name)}">${escape(o.name)}</span></div></td><td>${badge(o.status)}</td><td class="muted numeric date-column">${escape(date(o.created_at))}</td><td class="align-right numeric">${money(o.total_minor)}<span class="payment-label payment-${escape(o.payment_status)}">${escape(o.payment_status.replaceAll('_', ' '))}</span></td></tr>`).join('')}</tbody></table></div>` : empty(state.query || state.filter !== 'all' || state.payment !== 'all' ? 'No orders match just yet' : 'Your next chapter starts here', state.query || state.filter !== 'all' || state.payment !== 'all' ? 'Try another search or clear your filters.' : 'Orders placed through Messenger will appear here.', state.query || state.filter !== 'all' || state.payment !== 'all' ? 'clear' : 'guide', state.query || state.filter !== 'all' || state.payment !== 'all' ? 'Clear filters' : 'View workspace guide')}
     <div class="table-footer"><span>${compact ? `Showing ${rows.length} recent orders` : `Showing ${rows.length} of ${state.data.order_total ?? all.length} matching orders`}</span><span>${isDemo() ? 'Sample Messenger orders' : 'Messenger orders'}</span>${!compact && state.data.next_cursor ? button(state.paging ? 'Loading more...' : 'Load more orders', 'more-orders', 'arrow', state.paging ? 'disabled' : '') : ''}</div></div></section>`;
 }
@@ -221,7 +222,11 @@ async function api(path, options = {}, token = state.token) {
   catch { throw new Error('The connection timed out or was interrupted. Check your connection and try again.'); }
   if (!response.ok) {
     if (response.status === 401) throw new Error('That operator token wasn’t accepted. Check it and reconnect.');
-    if (response.status === 409) throw new Error('This record changed or the action is no longer available. Refresh the workspace, then try again.');
+    if (response.status === 409) {
+      const code = (await response.json().catch(() => ({}))).detail;
+      const messages = {refund_unavailable: 'This order no longer needs a refund. Reopen it to check its latest state.', refund_exceeds_remaining: 'The amount must be greater than zero and no more than the remaining refund.', refund_reference_required: 'Add the reference for the refund you completed.', refund_date_invalid: 'Choose a completion time between the order date and now.', notes_erased: 'Notes cannot be added after personal fields have been removed.', invalid_note: 'Write a note of up to 2,000 characters.'};
+      throw new Error(messages[code] || 'This record changed or the action is no longer available. Reopen it to review the latest details before trying again.');
+    }
     if (response.status === 422) throw new Error('Please check the values and try again.');
     throw new Error('The service couldn’t complete the request. Please try again shortly.');
   }
@@ -290,7 +295,58 @@ function openModal(title, content, drawer = false) {
 function closeModal() { if (dialog.getAttribute('aria-busy') !== 'true') dialog.close(); }
 dialog.addEventListener('close', () => { modalVersion++; dialog.innerHTML = ''; if (modalOpener?.isConnected) modalOpener.focus(); else $('#main').focus({preventScroll: true}); });
 dialog.addEventListener('cancel', event => { if (dialog.getAttribute('aria-busy') === 'true') event.preventDefault(); });
-function busy(value) { dialog.setAttribute('aria-busy', String(value)); dialog.querySelectorAll('button, input').forEach(n => n.disabled = value); }
+function busy(value) {
+  dialog.setAttribute('aria-busy', String(value));
+  dialog.querySelectorAll('button, input, textarea, select').forEach(node => {
+    if (value) { if (!disabledControls.has(node)) disabledControls.set(node, node.disabled); node.disabled = true; }
+    else if (disabledControls.has(node)) { node.disabled = disabledControls.get(node); disabledControls.delete(node); }
+  });
+}
+
+function activityItem(event) {
+  const after = event.data?.after || {}, before = event.data?.before || {};
+  const title = event.kind === 'note' ? 'Private note' : event.kind === 'refund' ? `External refund recorded · ${money(event.amount_minor)}` : event.kind === 'created' ? 'Order placed' : event.kind === 'status' ? before.payment_status !== after.payment_status && after.payment_status === 'paid' ? 'Payment verified' : `Order ${after.status || 'updated'}` : 'Personal fields removed';
+  const actor = ({operator: 'Operator', customer: 'Customer', seller_sheet: 'Seller sheet', system: 'System'})[event.actor] || 'Operator';
+  return `<li class="activity-entry activity-${escape(event.kind)}"><span class="activity-dot" aria-hidden="true"></span><div><strong>${escape(title)}</strong><p class="activity-meta">${escape(actor)} · ${date(event.created_at, {month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit'})}</p>${event.kind === 'note' ? `<p class="activity-body">${event.body ? escape(event.body) : 'Note text removed.'}</p>` : event.kind === 'refund' ? `<p class="activity-body">${event.body ? `Reference: ${escape(event.body)}` : 'Reference not retained.'}</p><p class="activity-meta">Completed ${date(event.occurred_at, {month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit'})} · Manila time</p>` : ''}</div></li>`;
+}
+function orderJournal(order) {
+  const refunded = order.refunded_minor || 0, remaining = Math.max(0, order.total_minor - refunded);
+  const refund = ['refund_required', 'refunded'].includes(order.payment_status) ? `<section class="refund-card" aria-label="Refund tracking"><span class="eyebrow">Refund tracking</span><div class="refund-amounts"><div><span>Recorded</span><strong>${money(refunded)}</strong></div><div><span>Remaining</span><strong>${money(remaining)}</strong></div></div><p>${remaining ? 'Record a refund after you have sent it outside TindaBot.' : 'The full external refund has been recorded.'}</p>${remaining ? button('Record external refund', 'record-refund', 'check') : ''}</section>` : '';
+  return `${refund}<section class="detail-section journal-section" aria-labelledby="activity-title"><div class="journal-heading"><h3 id="activity-title">Activity & notes</h3><span class="badge">Private</span></div><p class="field-help">Times in Manila. Notes stay with your shop and are never sent to customers.</p>${order.anonymized ? '<p class="muted">Personal fields were removed. New notes are disabled.</p>' : `<form id="note-form"><label for="order-note">Private note</label><textarea class="field" id="order-note" rows="3" maxlength="2000" required placeholder="Packing instructions, a customer follow-up, a detail to remember..." aria-describedby="note-help note-error"></textarea><p class="field-help" id="note-help">Up to 2,000 characters. Saved notes become part of the order history.</p><p id="note-error" class="error-message" aria-live="assertive"></p><div class="dialog-actions"><button class="button" type="submit">Add note ${icon('arrow')}</button></div></form>`}<ol class="activity-list" aria-label="Order activity">${(order.activity || []).map(activityItem).join('')}</ol><p class="field-help">Updates before activity tracking was enabled may not be recorded.</p>${order.next_activity_cursor ? button('Load earlier activity', 'earlier-activity') : ''}</section>`;
+}
+function refundModal() {
+  const order = detailOrder, remaining = order.total_minor - (order.refunded_minor || 0);
+  openModal('Record an external refund', `<div class="refund-context"><span class="eyebrow">${escape(order.code)}</span><strong>${money(remaining)} remaining</strong></div><p>This records money you already returned. TindaBot does not send a payment.</p><form id="refund-form"><label for="refund-amount">Amount refunded (PHP)</label><input class="field numeric" id="refund-amount" type="number" min="0.01" max="${(remaining / 100).toFixed(2)}" step="0.01" value="${(remaining / 100).toFixed(2)}" required>${order.anonymized ? '<p class="field-help">Personal fields were removed. A refund reference will not be retained.</p>' : '<label for="refund-reference">Refund reference</label><input class="field" id="refund-reference" maxlength="160" required placeholder="Transfer or receipt reference">'}<label for="refund-completed">Completed at (optional)</label><input class="field" id="refund-completed" type="datetime-local" step="1" aria-describedby="refund-time-help"><p class="field-help" id="refund-time-help">Leave blank for now. This field uses your device time zone.</p><label class="refund-confirm"><input type="checkbox" required><span>I have already sent this refund outside TindaBot.</span></label><p id="refund-error" class="error-message" role="alert"></p><div class="dialog-actions"><button class="button" type="button" data-order="${escape(order.id)}">Go back</button><button class="button button-primary" type="submit">Save refund record</button></div></form>`, true);
+  $('#refund-amount').focus();
+}
+async function saveOrderEntry(form) {
+  const order = detailOrder, note = form.id === 'note-form';
+  const errorNode = $(note ? '#note-error' : '#refund-error', form);
+  const submit = $('button[type="submit"]', form), label = submit.textContent;
+  const payload = {expected_version: order.version};
+  if (note) {
+    payload.body = $('#order-note').value.trim();
+    if (!payload.body) { errorNode.textContent = 'Write a note before saving.'; return; }
+  } else {
+    const raw = $('#refund-amount').value;
+    if (!/^\d+(\.\d{1,2})?$/.test(raw)) { errorNode.textContent = 'Use a positive amount with up to two decimal places.'; return; }
+    const [whole, fraction = ''] = raw.split('.');
+    payload.amount_minor = Number(whole) * 100 + Number(fraction.padEnd(2, '0'));
+    payload.reference = $('#refund-reference')?.value.trim() || '';
+    payload.completed_at = $('#refund-completed').value ? new Date($('#refund-completed').value).getTime() / 1000 : null;
+  }
+  const fingerprint = JSON.stringify(payload);
+  if (form.dataset.payload !== fingerprint) { form.dataset.payload = fingerprint; form.dataset.commandId = crypto.randomUUID(); }
+  payload.command_id = form.dataset.commandId;
+  errorNode.textContent = ''; submit.textContent = 'Saving...'; busy(true);
+  try {
+    if (isDemo()) { if (note) demoNote(order.id, payload.body); else demoRefund(order.id, payload.amount_minor, payload.reference, payload.completed_at); }
+    else await api(`/admin/orders/${encodeURIComponent(order.id)}/${note ? 'notes' : 'refunds'}`, {method: 'POST', body: JSON.stringify(payload)});
+    invalidateSnapshots(); await refresh(); busy(false); await showOrder(order.id);
+    toast(note ? 'Private note saved.' : 'External refund recorded.');
+  } catch (error) { errorNode.textContent = error.message; }
+  finally { busy(false); submit.textContent = label; }
+}
 function connectModal() {
   openModal('Make yourself at home', `<p>Connect this workspace to your shop using an operator token.</p><form id="connect-form"><label for="token">Operator token</label><input class="field" id="token" type="password" autocomplete="off" required maxlength="512" aria-describedby="token-help form-error"><p class="field-help" id="token-help">Use the ADMIN_TOKEN from your server configuration. It stays in this tab’s memory and is cleared on reload.</p><p id="form-error" class="error-message" role="alert"></p><div class="dialog-actions">${button('Cancel', 'close', '', 'type="button"')}<button class="button button-primary" type="submit">Connect workspace ${icon('arrow')}</button></div></form>`);
   $('#token').focus();
@@ -301,6 +357,7 @@ async function showOrder(id) {
   try {
     const order = isDemo() ? demoOrder(id) : await api(`/admin/workspace/orders/${encodeURIComponent(id)}`);
     if (!dialog.open || version !== modalVersion) return;
+    detailOrder = order;
     const next = {pending: ['confirmed', 'Confirm order'], confirmed: ['shipped', 'Mark as shipped'], shipped: ['delivered', 'Mark as delivered']}[order.status];
     const canAdvance = order.status !== 'confirmed' || order.details.payment === 'cod' || order.payment_status === 'paid';
     const queue = filteredOrders(state.view === 'overview' ? 'newest' : state.sort), position = queue.findIndex(item => item.id === id);
@@ -310,7 +367,7 @@ async function showOrder(id) {
     openModal(escape(order.code), `${browse}<div class="order-summary"><span class="eyebrow">Order total</span><strong class="numeric">${money(order.total_minor)}</strong><span>Placed ${Number.isFinite(order.created_at) ? date(order.created_at, {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'}) : 'date unavailable'} · Manila time</span></div>${journey}<div class="detail-section">${badge(order.status)} <span class="badge">${escape(order.details.payment?.toUpperCase() || 'Payment')} · ${escape(order.payment_status.replaceAll('_', ' '))}</span>${isDemo() ? '<p class="field-help">Sample order · edits only affect this preview.</p>' : ''}</div>
       <div class="detail-section"><h3>Customer</h3><p><strong>${escape(order.details.name || 'Customer')}</strong></p><p class="muted">${escape(order.details.phone)}</p><p class="muted">${escape(order.details.address || 'Pickup order')}</p></div>
       <div class="detail-section"><h3>Order items</h3>${order.items.map(i => `<div class="detail-line"><span>${escape(i.name)} <span class="muted">× ${i.qty}</span></span><strong class="numeric">${money(i.price_minor * i.qty)}</strong></div>`).join('')}<div class="detail-line muted"><span>Delivery</span><span class="numeric">${money(order.shipping_minor)}</span></div><div class="detail-line detail-total"><strong>Total</strong><strong class="numeric">${money(order.total_minor)}</strong></div></div>
-      <div class="detail-section"><h3>Next steps</h3><p class="muted">${order.status === 'cancelled' ? order.payment_status === 'refund_required' ? 'Arrange the refund with your customer outside TindaBot.' : 'This order is cancelled and stock has been released.' : order.status === 'delivered' ? 'This order has reached its customer.' : !canAdvance ? 'Verify payment before marking this order as shipped.' : 'Update the order when you’re ready. Stock and payment checks apply.'}</p><div class="detail-actions">${next ? `<button class="button button-primary" data-action="order-status" data-status="${next[0]}" ${!canAdvance ? 'disabled' : ''}>${next[1]}</button>` : ''}${order.payment_status === 'unpaid' && order.status !== 'cancelled' ? button('Verify payment…', 'verify-paid', 'check') : ''}${['pending', 'confirmed'].includes(order.status) ? '<button class="button button-quiet button-danger" data-action="verify-cancel">Cancel order…</button>' : ''}</div><p id="form-error" class="error-message" role="alert"></p></div>`, true);
+      <div class="detail-section"><h3>Next steps</h3><p class="muted">${order.status === 'cancelled' ? order.payment_status === 'refund_required' ? 'Arrange the refund with your customer outside TindaBot.' : 'This order is cancelled and stock has been released.' : order.status === 'delivered' ? 'This order has reached its customer.' : !canAdvance ? 'Verify payment before marking this order as shipped.' : 'Update the order when you’re ready. Stock and payment checks apply.'}</p><div class="detail-actions">${next ? `<button class="button button-primary" data-action="order-status" data-status="${next[0]}" ${!canAdvance ? 'disabled' : ''}>${next[1]}</button>` : ''}${order.payment_status === 'unpaid' && order.status !== 'cancelled' ? button('Verify payment…', 'verify-paid', 'check') : ''}${['pending', 'confirmed'].includes(order.status) ? '<button class="button button-quiet button-danger" data-action="verify-cancel">Cancel order…</button>' : ''}</div><p id="form-error" class="error-message" role="alert"></p></div>${orderJournal(order)}`, true);
     dialog.dataset.orderId = id; dialog.dataset.version = order.version;
     delete dialog.dataset.commandId; delete dialog.dataset.commandStatus;
   } catch (error) { if (dialog.open && version === modalVersion) openModal('Order unavailable', `<p class="error-message" role="alert">${escape(error.message)}</p>${button('Close', 'close')}`, true); }
@@ -385,6 +442,18 @@ document.addEventListener('click', async event => {
     node.innerHTML = icon(theme === 'dark' ? 'sun' : 'moon'); node.setAttribute('aria-label', `Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`); return;
   }
   if (action === 'export') return exportOrders();
+  if (action === 'record-refund') return refundModal();
+  if (action === 'earlier-activity') {
+    const version = modalVersion, order = detailOrder; node.disabled = true;
+    try {
+      const data = await api(`/admin/workspace/orders/${encodeURIComponent(order.id)}/activity?before=${order.next_activity_cursor}`);
+      if (!dialog.open || version !== modalVersion) return;
+      order.activity.push(...data.activity); order.next_activity_cursor = data.next_activity_cursor;
+      $('.activity-list', dialog).insertAdjacentHTML('beforeend', data.activity.map(activityItem).join(''));
+      if (!data.next_activity_cursor) { node.remove(); $('#activity-title').setAttribute('tabindex', '-1'); $('#activity-title').focus(); }
+    } catch (error) { toast(error.message); }
+    finally { node.disabled = false; } return;
+  }
   if (action === 'breakdown') return openModal('Daily order value', `<p>Philippine pesos · Manila time · cancelled orders excluded.</p><table><thead><tr><th scope="col" class="date-column">Date</th><th scope="col" class="align-right">Value</th></tr></thead><tbody>${state.data.series.map(v => `<tr><td>${date(v.timestamp)}</td><td class="align-right numeric">${money(v.value)}</td></tr>`).join('')}</tbody></table>`);
   if (action === 'verify-paid' || action === 'verify-cancel') {
     const status = action === 'verify-paid' ? 'paid' : 'cancelled';
@@ -410,6 +479,7 @@ document.addEventListener('click', async event => {
 });
 document.addEventListener('submit', async event => {
   const form = event.target;
+  if (['note-form', 'refund-form'].includes(form.id)) { event.preventDefault(); return saveOrderEntry(form); }
   if (!['connect-form', 'stock-form', 'automation-form'].includes(form.id)) return;
   event.preventDefault();
   const submit = $('button[type="submit"]', form), label = submit.textContent;

@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 
 import tindabot
 from tindabot.config import Settings
+from tindabot.db import Conversation, Order
 from tindabot.main import create_app
 
 
@@ -77,14 +78,59 @@ def main():
             assert queue.status_code == 200
             assert queue.json()["order_total"] == 0
             assert queue.json()["next_cursor"] is None
+            with client.app.state.db.sessions.begin() as session:
+                session.add(Conversation(key="smoke:customer", psid="smoke-customer"))
+                session.flush()
+                session.add(
+                    Order(
+                        id="smoke-order",
+                        code="TB-SMOKE",
+                        checkout_id="smoke-checkout",
+                        conversation_key="smoke:customer",
+                        details={"payment": "gcash"},
+                        items=[],
+                        total_minor=10000,
+                        shipping_minor=0,
+                        status="cancelled",
+                        payment_status="refund_required",
+                    )
+                )
+            auth = {"Authorization": "Bearer release-smoke-token-only"}
+            assert (
+                client.post(
+                    "/admin/orders/smoke-order/notes",
+                    headers=auth,
+                    json={
+                        "command_id": "smoke-note",
+                        "expected_version": 1,
+                        "body": "Release fixture note",
+                    },
+                ).status_code
+                == 200
+            )
+            refund = client.post(
+                "/admin/orders/smoke-order/refunds",
+                headers=auth,
+                json={
+                    "command_id": "smoke-refund",
+                    "expected_version": 2,
+                    "amount_minor": 10000,
+                    "reference": "SMOKE-ONLY",
+                },
+            )
+            assert refund.status_code == 200 and refund.json()["payment_status"] == "refunded"
+            detail = client.get("/admin/workspace/orders/smoke-order", headers=auth).json()
+            assert detail["refunded_minor"] == 10000
+            assert [event["kind"] for event in detail["activity"]] == ["refund", "note"]
     report = {
         "installed_wheel": True,
-        "migrations": "0002",
+        "migrations": "0003",
         "web_assets_verified": assets,
         "public_shell": True,
         "authenticated_snapshot": True,
         "diagnostic_contract_verified": True,
         "all_time_queue_contract_verified": True,
+        "notes_refund_and_activity_verified": True,
         "providers_called": False,
         "scope": "Installed wheel and migrations in isolated local Python environment; not container or hosting validation",
     }

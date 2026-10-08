@@ -11,6 +11,8 @@
 
 Render automatic deploys are disabled in the template. Production migrations should remain backward compatible with the previously deployed code. Application rollback uses the previously tested revision; do not run destructive Alembic downgrades against production as a routine rollback.
 
+The journal release requires schema `0003`. Older API builds that require exactly `0002` cannot serve as its rollback target. Prepare a compatible rollback build, drain/stop the old worker during promotion, and deploy matching API/worker versions. See [journal rollout and ledger constraints](ORDER_JOURNAL.md).
+
 ## Monitoring
 
 Run `uv run python scripts/check_health.py` from an independent monitor every minute, with `TINDABOT_URL` and `ADMIN_TOKEN` supplied securely. Connect nonzero exits to an actual operator notification channel. The script itself does not deliver alerts, and this external monitoring integration remains a launch requirement.
@@ -87,6 +89,6 @@ Train staff on unique command IDs, expected versions, paid versus fulfillment st
 
 ### Workspace follow-up views
 
-- In Orders, combine fulfillment and payment filters with All dates or Needs attention to review older work. Connected CSV exports include all matching pages and payment status; preview exports contain only sample data.
+- In Orders, combine fulfillment and payment filters with All dates or Needs attention to review older work. Connected CSV exports include all matching pages and payment status; preview exports contain only sample data. Activity & notes holds private instructions and new status history. Record external refunds only after sending them outside TindaBot; partial refunds retain the flag until the balance is fully reconciled. See [journal and refund operations](ORDER_JOURNAL.md).
 - In Inventory, sort by lowest stock or select Out of stock / Inactive. Adjustment shortcuts only fill the quantity; Save adjustment submits it. The estimate uses the displayed snapshot, while the server applies the signed adjustment against current stock. Each adjustment is limited to plus or minus 1,000,000 units.
 - Automation shows a snapshot and conditional next steps. Failed incoming events, failed outbound jobs, and uncertain deliveries are separate signals. Follow the reconciliation process above before retrying uncertain deliveries. A recent heartbeat does not certify provider delivery.

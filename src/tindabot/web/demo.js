@@ -23,6 +23,15 @@ const orders = Array.from({length: 86}, (_, i) => {
     items: [{sku: p.sku, name: p.name, price_minor: p.price_minor, qty}]};
 });
 let automation = true;
+let activityId = 1;
+for (const order of orders) {
+  order.refunded_minor = 0;
+  order.activity = [{id: activityId++, kind: 'created', actor: 'customer', created_at: order.created_at, occurred_at: order.created_at, data: {}}];
+}
+function demoActivity(order, kind, fields = {}) {
+  const now = Date.now() / 1000;
+  order.activity.unshift({id: activityId++, kind, actor: 'operator', created_at: now, occurred_at: now, data: {}, ...fields});
+}
 export function demoSnapshot(days, scope = 'period') {
   const start = today - (days - 1) * 86400;
   const recent = orders.filter(o => o.created_at >= start);
@@ -34,6 +43,7 @@ export function demoSnapshot(days, scope = 'period') {
 export const demoOrder = (id) => orders.find(o => o.id === id);
 export function demoStatus(id, status) {
   const order = demoOrder(id);
+  const before = {status: order.status, payment_status: order.payment_status};
   if (status === 'paid') order.payment_status = 'paid';
   else {
     order.status = status;
@@ -43,6 +53,21 @@ export function demoStatus(id, status) {
     }
   }
   order.version++;
+  demoActivity(order, 'status', {data: {before, after: {status: order.status, payment_status: order.payment_status}}});
+}
+export function demoNote(id, body) {
+  const order = demoOrder(id);
+  order.version++;
+  demoActivity(order, 'note', {body});
+}
+export function demoRefund(id, amount, reference, completed) {
+  const order = demoOrder(id);
+  if (order.payment_status !== 'refund_required' || amount <= 0 || amount > order.total_minor - order.refunded_minor) throw new Error('Check the remaining refund amount.');
+  if (completed && (completed < order.created_at || completed > Date.now() / 1000)) throw new Error('Choose a completion time between the order date and now.');
+  order.refunded_minor += amount;
+  if (order.refunded_minor === order.total_minor) order.payment_status = 'refunded';
+  order.version++;
+  demoActivity(order, 'refund', {amount_minor: amount, body: reference, occurred_at: completed || Date.now() / 1000});
 }
 export function demoStock(sku, delta) { products.find(p => p.sku === sku).stock += delta; }
 export function demoAutomation(value) { automation = value; }

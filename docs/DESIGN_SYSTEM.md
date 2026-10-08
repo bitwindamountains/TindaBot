@@ -84,4 +84,6 @@ Orders combine independent fulfillment and payment filters. Payment labels remai
 
 Orders now defaults to All dates, with Needs attention and Reporting period scopes. Connected search and filters operate on the server, Load more orders retrieves subsequent pages, and CSV exports retrieve the whole selected result set. Pending counts cover all dates independently of financial charts. Back/Forward and section returns retain working context in tab memory; credentials and customer searches are excluded from persistent storage and browser history. Order-code targets remain at least 44 pixels wide, including shorter legacy codes.
 
+The order drawer now includes a private note composer and a paged activity timeline. Refund-required orders show recorded and remaining amounts in a copper-tinted card. The recording form distinguishes an external payment from a system action, requires an explicit confirmation, and keeps failed submissions available for retry. The refund card and journal are checked for contrast in light/dark themes and for overflow on a 390px viewport.
+
 See `FEATURE_REVIEW.md` for findings, completed changes, and the remaining feature priorities.
