@@ -6,6 +6,8 @@ Use **Open Page inbox** and select the correct shop and conversation in Meta Bus
 
 After handling the request, choose **Review resume**, confirm, and select **Resume bot**. STOP requests explicitly require confirming the customer wants bot replies again. Resuming sends no message and still respects the shop-wide automation setting. If another message or pause arrives while the dialog is open, the version check rejects the stale action; return and refresh. A lost response can also produce this conflict on retry: refresh to see whether the first resume succeeded.
 
+Resume is also blocked while received events are pending or failed, even before the conversation version changes. Check the worker, let it process the events, and refresh before deciding again. STOP remains the displayed reason through later Page replies or repeated pauses until an explicit resume. If resume succeeds but the following queue refresh fails, the dialog confirms the saved result and offers refresh only. See the [review and fixes](HANDOVER_REVIEW.md).
+
 ## Deliberately small scope
 
 - Uses the existing conversation pause flag, version and JSON context. No new table, migration, chat system, assignment system or provider API request.

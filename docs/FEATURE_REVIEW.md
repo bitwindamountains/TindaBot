@@ -8,7 +8,7 @@ The order journal increment is implemented: [private order notes, activity histo
 
 Delivery recovery is now implemented: [protected inspection, safe retry/suppression and audit records](DELIVERY_RECOVERY.md).
 
-The next small increment is implemented: [human handover queue](HANDOVER_QUEUE.md), with waiting counts, customer last-contact times, a Page inbox link and explicit version-checked resume. Pre-existing unmarked pauses are not backfilled; see its rollout limits.
+The next small increment is implemented: [human handover queue](HANDOVER_QUEUE.md), with waiting counts, customer last-contact times, a Page inbox link and explicit version-checked resume. Pre-existing unmarked pauses are not backfilled; see its rollout limits. A subsequent [handover review](HANDOVER_REVIEW.md) fixed STOP reason loss, resume past pending activity and misleading post-save refresh errors.
 
 ## Changes completed
 

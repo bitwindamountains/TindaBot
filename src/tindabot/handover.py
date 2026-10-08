@@ -6,7 +6,12 @@ from tindabot.db import Conversation
 def set_pause(conversation, paused, reason="operator", now=0):
     context = dict(conversation.context)
     if paused:
-        context["handover"] = {"reason": reason, "since": now}
+        previous = context.get("handover", {}) if conversation.paused else {}
+        # A seller reply or another pause is not customer consent to resume.
+        context["handover"] = {
+            "reason": "stop" if previous.get("reason") == "stop" else reason,
+            "since": previous.get("since", now),
+        }
     else:
         context.pop("handover", None)
     conversation.context = context

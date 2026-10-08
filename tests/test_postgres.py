@@ -312,6 +312,14 @@ def test_handover_query_and_stale_resume_on_postgres(pgdb, settings):
         )
 
 
+@pytest.mark.parametrize("kind", ["message", "echo", "failed"])
+def test_pending_activity_blocks_resume_on_postgres(pgdb, settings, kind):
+    from test_handover import test_resume_rejects_received_but_unprocessed_activity
+
+    with TestClient(create_app(settings, pgdb)) as client:
+        test_resume_rejects_received_but_unprocessed_activity(client, pgdb, settings, kind)
+
+
 @pytest.mark.parametrize("same_command", [True, False])
 def test_concurrent_delivery_recovery_has_one_audit(pgdb, settings, same_command):
     from fastapi.testclient import TestClient

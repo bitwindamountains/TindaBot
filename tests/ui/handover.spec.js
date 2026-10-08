@@ -59,3 +59,31 @@ test('connected handovers paginate, escape names and reject stale resume', async
   await expect(page.getByRole('heading', {name: 'No tracked handovers waiting.'})).toBeVisible();
   expect(commands).toEqual([{enabled: false, expected_version: 2}, {enabled: false, expected_version: 3}]);
 });
+
+test('a saved resume remains clearly saved when the queue refresh fails', async ({page}) => {
+  const now = Date.now()/1000;
+  let resumed = false, posts = 0, failRefresh = true;
+  await page.route('**/admin/**', route => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.endsWith('/pause')) { resumed = true; posts++; return route.fulfill({json: {paused: false}}); }
+    if (path.endsWith('/handovers')) {
+      if (resumed && failRefresh) return route.fulfill({status: 503, json: {detail: 'Unavailable'}});
+      return route.fulfill({json: {conversations: resumed ? [] : [{psid: '200', name: 'Test customer', reason: 'customer', version: 2, last_customer_at: now}], next_cursor: null}});
+    }
+    return route.fulfill({json: {shop_name: 'Test shop', generated_at: now, summary: {orders: 0, order_value: 0, pending: 0, products: 0}, orders: [], products: [], series: Array.from({length: 7}, (_, i) => ({timestamp: now-(6-i)*86400, value: 0})), automation: true, delivery_mode: 'dry_run', worker_age_seconds: 0, failures: 0, queue: 0, handover_count: resumed ? 0 : 1}});
+  });
+  await page.goto('/#automation');
+  await page.getByRole('button', {name: 'Connect shop', exact: true}).click();
+  await page.getByLabel('Operator token', {exact: true}).fill('test-token');
+  await page.getByRole('button', {name: 'Connect workspace'}).click();
+  await page.getByRole('button', {name: /Customers needing help/}).click();
+  await page.getByRole('button', {name: 'Review resume'}).click();
+  await page.getByRole('checkbox').check();
+  await page.getByRole('button', {name: 'Resume bot', exact: true}).click();
+  await expect(page.locator('#handover-error')).toContainText('Resume saved');
+  await expect(page.getByRole('button', {name: 'Resume bot', exact: true})).toHaveCount(0);
+  failRefresh = false;
+  await page.getByRole('button', {name: 'Refresh handovers'}).click();
+  await expect(page.locator('#handover-error')).toBeEmpty();
+  expect(posts).toBe(1);
+});

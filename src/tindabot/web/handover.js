@@ -36,12 +36,16 @@ export function handoverQueue({api, openModal, escape, date, isDemo, refresh, to
     const form = event.target; if (form.id !== 'handover-resume') return;
     event.preventDefault(); busy(true);
     const c = rows.find(c => c.psid === form.dataset.psid);
+    let saved = false;
     try {
       if (isDemo()) sampleHandovers.splice(sampleHandovers.findIndex(row => row.psid === c.psid), 1);
       else await api(`/admin/conversations/${encodeURIComponent(c.psid)}/pause`, {method: 'POST', body: JSON.stringify({enabled: false, expected_version: c.version})});
+      saved = true;
+      openModal('Conversation resumed', '<p>Resume saved. No message was sent. Refresh the queue to check current requests.</p><button class="button" data-handover="refresh">Refresh handovers</button><p id="handover-error" class="error-message" role="alert"></p>', true);
+      busy(true);
       invalidateSnapshots(); await refresh(); toast('Conversation resumed. No message was sent.');
       busy(false); await load();
-    } catch (error) { if (active) dialog.querySelector('#handover-error').textContent = `${error.message} Return to the list and refresh before trying again.`; }
+    } catch (error) { if (active) dialog.querySelector('#handover-error').textContent = saved ? `Resume saved, but the queue could not refresh. ${error.message} Use Refresh handovers to check current requests.` : `${error.message} Return to the list and refresh before trying again.`; }
     finally { busy(false); }
   }
   dialog.addEventListener('click', click); dialog.addEventListener('submit', submit);
