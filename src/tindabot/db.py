@@ -13,6 +13,8 @@ from sqlalchemy import (
     Text,
     create_engine,
     event,
+    select,
+    text,
 )
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -152,6 +154,12 @@ class Database:
                 connection.execute("PRAGMA journal_mode=WAL")
 
         self.sessions = sessionmaker(self.engine, expire_on_commit=False)
+
+    def schema_ready(self) -> bool:
+        with self.sessions() as session:
+            revision = session.scalar(text("SELECT version_num FROM alembic_version"))
+            session.scalar(select(Inbox.id).limit(1))
+            return revision == "0003"
 
 
 def insert_once(session, model, values: dict, key: str):

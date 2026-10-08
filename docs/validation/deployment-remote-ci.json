@@ -1,0 +1,12 @@
+{
+  "checked_at": "2026-10-08",
+  "repository": "bitwindamountains/TindaBot",
+  "remote_branch": "main",
+  "head_sha": "334152c3ef050fc488ddb608150f8bdc27eae965",
+  "run_id": 37754352899,
+  "url": "https://github.com/bitwindamountains/TindaBot/actions/runs/37754352899",
+  "conclusion": "success",
+  "container_build_and_api_readiness": "success",
+  "current_candidate_verified": false,
+  "scope": "Earlier revision only; current code, new worker smoke and Python 3.12.15 require a new CI run."
+}

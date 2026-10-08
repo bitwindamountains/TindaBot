@@ -2,6 +2,6 @@
   "valid": true,
   "schema_source": "https://render.com/schema/render.yaml.json",
   "schema_sha256": "a0d4e8a3eb119a1b63657741757e3c25c091b3ce463c4be8c90e8026678d8163",
-  "blueprint_sha256": "a3e38258811fca59908e808e8c97388504ede7121b2ab728e51fcd402334ab1c",
+  "blueprint_sha256": "509bbf645ededefd4000a1806e0ade232c209ae0488e60f199e731e6bc9aa4da",
   "scope": "Static schema validation only; no services were provisioned"
 }

@@ -21,15 +21,18 @@ jobs:
       APP_ENV: test
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12.15"
       - uses: astral-sh/setup-uv@v6
         with:
           version: "0.12.21"
-          python-version: "3.12"
       - run: uv sync --frozen
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run pytest --cov=tindabot --cov-report=term-missing
       - run: uv run pip-audit --skip-editable
+      - run: uv run python scripts/validate_deploy.py
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
@@ -54,13 +57,32 @@ jobs:
             docs/validation/workspace-*.png
             docs/validation/ui-tests.json
             test-results/
-      - name: Build container and check PostgreSQL readiness
+      - name: Build container and check API and worker readiness
         shell: bash
         run: |
           docker build --tag tindabot:ci .
           docker run --rm --network host -e APP_ENV=test -e DATABASE_URL="$TEST_DATABASE_URL" tindabot:ci .venv/bin/alembic upgrade head
-          docker run --detach --rm --name tindabot-smoke --network host -e APP_ENV=test -e DATABASE_URL="$TEST_DATABASE_URL" tindabot:ci
-          trap 'docker stop tindabot-smoke' EXIT
+          trap 'docker stop tindabot-smoke tindabot-worker-smoke >/dev/null 2>&1 || true' EXIT
+          docker run --detach --rm --name tindabot-smoke --network host -e APP_ENV=test -e ADMIN_TOKEN=ci-smoke-only -e DATABASE_URL="$TEST_DATABASE_URL" tindabot:ci
+          docker run --detach --rm --name tindabot-worker-smoke --network host -e APP_ENV=test -e DATABASE_URL="$TEST_DATABASE_URL" tindabot:ci .venv/bin/tindabot worker
           curl --fail --retry 10 --retry-delay 1 --retry-connrefused http://127.0.0.1:8000/readyz
           curl --fail http://127.0.0.1:8000/ --output /dev/null
           curl --fail http://127.0.0.1:8000/assets/app.js --output /dev/null
+          python - <<'PY'
+          import json
+          import time
+          import urllib.request
+
+          request = urllib.request.Request(
+              "http://127.0.0.1:8000/admin/health",
+              headers={"Authorization": "Bearer ci-smoke-only"},
+          )
+          for _ in range(20):
+              with urllib.request.urlopen(request, timeout=5) as response:
+                  age = json.load(response)["worker_age_seconds"]
+              if age is not None and age < 60:
+                  break
+              time.sleep(1)
+          else:
+              raise SystemExit("Container worker did not report a fresh heartbeat")
+          PY

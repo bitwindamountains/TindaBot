@@ -17,3 +17,17 @@ def test_live_mode_requires_real_integrations():
 def test_invalid_payment_configuration_fails_fast():
     with pytest.raises(ValidationError, match="GCASH_INSTRUCTIONS"):
         Settings(_env_file=None, payment_methods="gcash")
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        {"app_env": "production", "admin_token": "config-secret-sentinel"},
+        {"smtp_port": "config-secret-sentinel"},
+    ],
+)
+def test_configuration_errors_hide_raw_inputs(values):
+    with pytest.raises(ValidationError) as error:
+        Settings(_env_file=None, **values)
+    assert "config-secret-sentinel" not in str(error.value)
+    assert "input_value" not in str(error.value)

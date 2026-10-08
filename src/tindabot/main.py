@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 from starlette.concurrency import run_in_threadpool
 
@@ -106,11 +106,8 @@ def create_app(settings=None, database=None):
     @app.get("/readyz")
     def ready():
         try:
-            with db.sessions() as session:
-                revision = session.scalar(text("SELECT version_num FROM alembic_version"))
-                session.scalar(select(Inbox.id).limit(1))
-                if revision != "0003":
-                    raise HTTPException(503, "Schema not ready")
+            if not db.schema_ready():
+                raise HTTPException(503, "Schema not ready")
             return {"status": "ready"}
         except SQLAlchemyError as exc:
             raise HTTPException(503, "Database not ready") from exc
