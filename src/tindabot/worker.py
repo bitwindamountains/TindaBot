@@ -200,7 +200,9 @@ def maintenance(db, settings, now=None):
             )
             .with_for_update(skip_locked=True)
         ):
-            conversation.context, conversation.state = {}, "IDLE"
+            marker = conversation.context.get("handover")
+            conversation.context = {"handover": marker} if marker and conversation.paused else {}
+            conversation.state = "IDLE"
         cutoff = now - settings.order_pii_retention_days * 86400
         for order in session.scalars(
             select(Order)

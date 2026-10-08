@@ -1,5 +1,6 @@
 import {icon} from './icons.js';
 import {deliveryReview} from './recovery.js';
+import {handoverQueue, sampleHandovers} from './handover.js';
 import {demoSnapshot, demoOrder, demoStatus, demoStock, demoAutomation, demoNote, demoRefund} from './demo.js';
 import {heroBackdrop, observeScenes, toggleAmbient} from './motion.js';
 
@@ -157,11 +158,15 @@ function commands() {
 }
 function overview() {
   const d = state.data, low = d.products.filter(p => p.active && p.stock <= 5).length;
-  return metrics() + `<div class="main-grid">${chart()}<section class="panel focus-panel"><div class="panel-head"><div><span class="eyebrow">Make room for what matters</span><h2>Your short list.</h2><p>Three places to keep things moving.</p></div>${icon('leaf')}</div><div class="attention">
+  return metrics() + `<div class="main-grid">${chart()}<section class="panel focus-panel"><div class="panel-head"><div><span class="eyebrow">Make room for what matters</span><h2>Your short list.</h2><p>Keep orders and customer requests moving.</p></div>${icon('leaf')}</div><div class="attention">
     <button class="attention-row" data-action="pending"><span class="attention-icon numeric">01</span><span><span class="attention-title">${d.summary.pending} orders to confirm</span><small>Give your customers a happy update</small></span>${icon('chevron')}</button>
     <button class="attention-row" data-action="low-stock"><span class="attention-icon numeric">02</span><span><span class="attention-title">${low} products running low</span><small>A good time to check your shelves</small></span>${icon('chevron')}</button>
     <button class="attention-row" data-view="automation"><span class="attention-icon numeric">03</span><span><span class="attention-title">${d.failures ? `${d.failures} jobs need a look` : 'Your automation, at a glance'}</span><small>${d.automation ? 'Replies are enabled' : 'Replies are paused'}</small></span>${icon('chevron')}</button>
-    </div><div class="bot-foot">${icon('shield')}<span>${isDemo() ? 'Sample activity · explore with confidence' : d.worker_age_seconds !== null && d.worker_age_seconds < 120 ? 'Worker heartbeat received recently' : 'Worker heartbeat needs attention'}</span></div></section></div>${orderTable(true)}`;
+    ${handoverButton()}</div><div class="bot-foot">${icon('shield')}<span>${isDemo() ? 'Sample activity · explore with confidence' : d.worker_age_seconds !== null && d.worker_age_seconds < 120 ? 'Worker heartbeat received recently' : 'Worker heartbeat needs attention'}</span></div></section></div>${orderTable(true)}`;
+}
+function handoverButton() {
+  const count = isDemo() ? sampleHandovers.length : state.data.handover_count || 0;
+  return `<button class="attention-row" data-action="handovers"><span class="attention-icon numeric">${count}</span><span><span class="attention-title">Customers needing help</span><small>${count} tracked handovers · review paused conversations</small></span>${icon('chevron')}</button>`;
 }
 function orderPipeline() {
   const stages = [['pending', 'To confirm', 'clock'], ['confirmed', 'To prepare', 'box'], ['shipped', 'On the way', 'arrow'], ['delivered', 'Delivered', 'check']];
@@ -210,7 +215,7 @@ function automationChecklist(d, healthy) {
 }
 function automation() {
   const d = state.data, healthy = d.worker_age_seconds !== null && d.worker_age_seconds < 120;
-  return automationBrief(d, healthy) + `<div class="automation-layout"><section class="panel automation-panel" aria-label="Automation settings"><div class="panel-head"><div><h2>Messenger assistant</h2><p>A helping hand, with you in control.</p></div>${icon('bot')}</div>
+  return handoverButton() + automationBrief(d, healthy) + `<div class="automation-layout"><section class="panel automation-panel" aria-label="Automation settings"><div class="panel-head"><div><h2>Messenger assistant</h2><p>A helping hand, with you in control.</p></div>${icon('bot')}</div>
     <div class="setting-row"><div><h3>Automated replies</h3><p>${d.automation_locked ? 'Disabled by server configuration. Ask your operator to enable automation.' : 'Let TindaBot guide customers from browsing to checkout.'}</p></div><button class="switch" role="switch" aria-label="Automated replies" aria-checked="${d.automation}" data-action="automation" ${d.automation_locked ? 'disabled' : ''}></button></div>
     <div class="setting-row"><div><h3>Delivery mode</h3><p>${d.delivery_mode === 'live' ? 'Messages can be sent to customers.' : 'Messages are recorded without being sent to customers.'}</p></div><span class="badge">${d.delivery_mode === 'live' ? 'Live' : 'Dry run'}</span></div>
     <div class="setting-row"><div><h3>Worker heartbeat</h3><p>${isDemo() ? 'Illustrative activity for this preview.' : d.worker_age_seconds === null ? 'No heartbeat received. Start the worker and refresh.' : `Last received ${Math.floor(d.worker_age_seconds)} seconds before this refresh.`}</p></div><span class="badge ${healthy ? 'badge-delivered' : 'badge-pending'}">${isDemo() ? 'Sample' : healthy ? 'Recent' : 'Check worker'}</span></div>
@@ -425,6 +430,7 @@ document.addEventListener('click', async event => {
   if (node.dataset.filter) { state.filter = node.dataset.filter; return updateOrderView(`[data-filter="${state.filter}"]`); }
   if (node.dataset.order) return showOrder(node.dataset.order);
   const action = node.dataset.action;
+  if (action === 'handovers') return handoverQueue({api, openModal, escape, date, isDemo, refresh, toast, busy, invalidateSnapshots});
   if (action === 'deliveries') return deliveryReview({api, openModal, escape, date, button, isDemo, refresh, toast, busy});
   if (action === 'clear-search') { state.query = ''; $('#search').value = ''; return updateOrderView('#search'); }
   if (action === 'commands') return commands();

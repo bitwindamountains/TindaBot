@@ -14,6 +14,7 @@ from tindabot.catalog import CatalogImport, adjust_stock, import_catalog
 from tindabot.config import Settings
 from tindabot.db import Conversation, Database, Inbox, Outbox, Record, insert_once
 from tindabot.events import accept_events, valid_signature
+from tindabot.handover import set_pause
 from tindabot.orders import OrderConflict, apply_order_action, change_status
 from tindabot.recovery import revision
 
@@ -47,6 +48,10 @@ class RefundCommand(BaseModel):
 
 class Toggle(BaseModel):
     enabled: bool
+
+
+class PauseCommand(Toggle):
+    expected_version: int | None = Field(default=None, ge=0)
 
 
 class Replay(BaseModel):
@@ -243,7 +248,7 @@ def create_app(settings=None, database=None):
         return {"enabled": command.enabled}
 
     @app.post("/admin/conversations/{psid}/pause", dependencies=[Depends(operator)])
-    def pause(psid: str, command: Toggle):
+    def pause(psid: str, command: PauseCommand):
         with db.sessions.begin() as session:
             conversation = session.scalar(
                 select(Conversation)
@@ -252,7 +257,12 @@ def create_app(settings=None, database=None):
             )
             if not conversation:
                 raise HTTPException(404, "Conversation not found")
-            conversation.paused = command.enabled
+            if (
+                command.expected_version is not None
+                and command.expected_version != conversation.version
+            ):
+                raise HTTPException(409, "Conversation changed; refresh the handover queue")
+            set_pause(conversation, command.enabled, now=time.time())
         return {"paused": command.enabled}
 
     @app.post("/admin/jobs/{job_id}/resolve", dependencies=[Depends(operator)])

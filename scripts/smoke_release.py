@@ -34,6 +34,7 @@ def main():
             app_env="test",
             database_url=url,
             delivery_mode="dry_run",
+            meta_page_id="100",
             admin_token="release-smoke-token-only",
         )
         with TestClient(create_app(settings)) as client:
@@ -50,6 +51,7 @@ def main():
                 "theme.js",
                 "app.js",
                 "recovery.js",
+                "handover.js",
                 "icons.js",
                 "demo.js",
                 "favicon.svg",
@@ -80,14 +82,14 @@ def main():
             assert queue.json()["order_total"] == 0
             assert queue.json()["next_cursor"] is None
             with client.app.state.db.sessions.begin() as session:
-                session.add(Conversation(key="smoke:customer", psid="smoke-customer"))
+                session.add(Conversation(key="100:200", psid="200"))
                 session.flush()
                 session.add(
                     Order(
                         id="smoke-order",
                         code="TB-SMOKE",
                         checkout_id="smoke-checkout",
-                        conversation_key="smoke:customer",
+                        conversation_key="100:200",
                         details={"payment": "gcash"},
                         items=[],
                         total_minor=10000,
@@ -149,6 +151,29 @@ def main():
                     == 200
                 )
             assert client.get("/admin/workspace/jobs", headers=auth).json()["jobs"] == []
+            assert (
+                client.post(
+                    "/admin/conversations/200/pause",
+                    headers=auth,
+                    json={"enabled": True},
+                ).status_code
+                == 200
+            )
+            handovers = client.get("/admin/workspace/handovers", headers=auth).json()[
+                "conversations"
+            ]
+            assert len(handovers) == 1
+            assert (
+                client.post(
+                    "/admin/conversations/200/pause",
+                    headers=auth,
+                    json={"enabled": False, "expected_version": handovers[0]["version"]},
+                ).status_code
+                == 200
+            )
+            assert (
+                client.get("/admin/workspace/handovers", headers=auth).json()["conversations"] == []
+            )
     report = {
         "installed_wheel": True,
         "migrations": "0003",
@@ -159,6 +184,7 @@ def main():
         "all_time_queue_contract_verified": True,
         "notes_refund_and_activity_verified": True,
         "delivery_recovery_verified": True,
+        "handover_queue_verified": True,
         "providers_called": False,
         "scope": "Installed wheel and migrations in isolated local Python environment; not container or hosting validation",
     }

@@ -9,6 +9,7 @@
     "theme.js",
     "app.js",
     "recovery.js",
+    "handover.js",
     "icons.js",
     "demo.js",
     "favicon.svg",
@@ -22,6 +23,7 @@
   "all_time_queue_contract_verified": true,
   "notes_refund_and_activity_verified": true,
   "delivery_recovery_verified": true,
+  "handover_queue_verified": true,
   "providers_called": false,
   "scope": "Installed wheel and migrations in isolated local Python environment; not container or hosting validation"
 }

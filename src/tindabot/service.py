@@ -4,6 +4,7 @@ import uuid
 from sqlalchemy import func, select
 
 from tindabot.db import Conversation, Inbox, Order, Product, Record, enqueue
+from tindabot.handover import set_pause
 from tindabot.machine import transition
 from tindabot.messages import COPY, MENU, confirmation, money, summary, text
 from tindabot.orders import OrderConflict, create_order, quote
@@ -98,7 +99,7 @@ def process_one(db, settings, now=None, before_commit=None):
                     else None
                 )
                 if not own and not known:
-                    conversation.paused = True
+                    set_pause(conversation, True, "page_reply", now)
             else:
                 # Delayed deliveries never reopen the window using receipt time.
                 conversation.last_customer_at = max(
@@ -106,7 +107,7 @@ def process_one(db, settings, now=None, before_commit=None):
                 )
                 command = payload.get("value", "").strip().upper()
                 if command in {"MENU", "GET_STARTED"} and now - event.occurred_at < 86400:
-                    conversation.paused = False
+                    set_pause(conversation, False)
                 minute = int(now // 60)
                 conversation.rate_count = (
                     conversation.rate_count + 1 if conversation.rate_minute == minute else 1
@@ -116,6 +117,12 @@ def process_one(db, settings, now=None, before_commit=None):
                 enabled = settings.automation_enabled and (
                     not control or control.value.get("enabled", True)
                 )
+                if (
+                    command in {"SELLER", "AGENT", "TAO", "TALK_TO_SELLER", "STOP"}
+                    and (conversation.paused or not enabled)
+                    and now - event.occurred_at < 86400
+                ):
+                    set_pause(conversation, True, "stop" if command == "STOP" else "customer", now)
                 if (
                     not conversation.paused
                     and enabled
@@ -149,6 +156,10 @@ def process_one(db, settings, now=None, before_commit=None):
                     for action in decision.actions:
                         if action == "pause":
                             conversation.paused = True
+                            ctx["handover"] = {
+                                "reason": "stop" if command == "STOP" else "customer",
+                                "since": now,
+                            }
                             enqueue(
                                 session,
                                 key=f"handover:{event.id}",
