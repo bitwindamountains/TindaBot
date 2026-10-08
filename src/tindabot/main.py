@@ -257,6 +257,17 @@ def create_app(settings=None, database=None):
             )
             if not conversation:
                 raise HTTPException(404, "Conversation not found")
+            # Version changes happen during processing, not durable intake. Do not
+            # resume past customer activity that the operator has not seen yet.
+            if not command.enabled and session.scalar(
+                select(Inbox.id)
+                .where(
+                    Inbox.conversation_key == conversation.key,
+                    Inbox.status.in_(["pending", "failed"]),
+                )
+                .limit(1)
+            ):
+                raise HTTPException(409, "conversation_pending")
             if (
                 command.expected_version is not None
                 and command.expected_version != conversation.version

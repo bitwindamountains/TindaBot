@@ -1,9 +1,10 @@
 import time
 
+import pytest
 from conftest import envelope, send
 from sqlalchemy import func, select
 
-from tindabot.db import Conversation, Outbox, Record
+from tindabot.db import Conversation, Inbox, Outbox, Record
 from tindabot.events import accept_events
 from tindabot.handover import set_pause
 from tindabot.privacy import erase_customer
@@ -106,3 +107,57 @@ def test_requests_are_visible_while_global_automation_is_off(client, db, setting
     assert c["reason"] == "customer"
     with db.sessions() as session:
         assert session.scalar(select(func.count()).select_from(Outbox)) == 0
+
+
+def test_stop_reason_survives_page_reply_and_repeated_pause(client, db, settings):
+    send(db, settings, "STOP")
+    initial = client.get(PATH, headers=AUTH).json()["conversations"][0]
+    accept_events(db, settings, envelope("Seller reply", echo=True, app_id="external"))
+    assert process_one(db, settings)
+    assert (
+        client.post(
+            "/admin/conversations/200/pause", headers=AUTH, json={"enabled": True}
+        ).status_code
+        == 200
+    )
+    send(db, settings, "SELLER")
+    current = client.get(PATH, headers=AUTH).json()["conversations"][0]
+    assert current["reason"] == "stop"
+    assert current["since"] == initial["since"]
+    assert current["version"] > initial["version"]
+    send(db, settings, "MENU")
+    send(db, settings, "SELLER")
+    assert client.get(PATH, headers=AUTH).json()["conversations"][0]["reason"] == "customer"
+
+
+@pytest.mark.parametrize("kind", ["message", "echo", "failed"])
+def test_resume_rejects_received_but_unprocessed_activity(client, db, settings, kind):
+    send(db, settings, "SELLER")
+    c = client.get(PATH, headers=AUTH).json()["conversations"][0]
+    accept_events(
+        db, settings, envelope("I still need help", echo=kind == "echo", app_id="external")
+    )
+    if kind == "failed":
+        with db.sessions.begin() as session:
+            session.scalar(select(Inbox).where(Inbox.status == "pending")).status = "failed"
+    response = client.post(
+        "/admin/conversations/200/pause",
+        headers=AUTH,
+        json={"enabled": False, "expected_version": c["version"]},
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"] == "conversation_pending"
+    with db.sessions() as session:
+        stored = session.get(Conversation, "100:200")
+        assert stored.paused and stored.version == c["version"]
+    if kind != "failed":
+        assert process_one(db, settings)
+        latest = client.get(PATH, headers=AUTH).json()["conversations"][0]
+        assert (
+            client.post(
+                "/admin/conversations/200/pause",
+                headers=AUTH,
+                json={"enabled": False, "expected_version": latest["version"]},
+            ).status_code
+            == 200
+        )

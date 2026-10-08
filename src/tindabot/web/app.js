@@ -231,6 +231,7 @@ async function api(path, options = {}, token = state.token) {
     if (response.status === 401) throw new Error('That operator token wasn’t accepted. Check it and reconnect.');
     if (response.status === 409) {
       const code = (await response.json().catch(() => ({}))).detail;
+      if (code === 'conversation_pending') throw new Error('Incoming conversation activity still needs processing. Check the worker and refresh before resuming.');
       const messages = {refund_unavailable: 'This order no longer needs a refund. Reopen it to check its latest state.', refund_exceeds_remaining: 'The amount must be greater than zero and no more than the remaining refund.', refund_reference_required: 'Add the reference for the refund you completed.', refund_date_invalid: 'Choose a completion time between the order date and now.', notes_erased: 'Notes cannot be added after personal fields have been removed.', invalid_note: 'Write a note of up to 2,000 characters.'};
       throw new Error(messages[code] || 'This record changed or the action is no longer available. Reopen it to review the latest details before trying again.');
     }
