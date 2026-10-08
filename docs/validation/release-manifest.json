@@ -5,23 +5,23 @@
   "artifacts": [
     {
       "file": "tindabot-0.1.0-py3-none-any.whl",
-      "bytes": 447838,
-      "sha256": "05d95c2ac3c3b034ef94527534c1c8082ce8674798b70d14bbeff801deaed416",
+      "bytes": 447931,
+      "sha256": "665b619800dad59645a602590653a8f64a4237a36d40e3dd9a4384c57d1448b9",
       "files": 37
     },
     {
       "file": "tindabot-0.1.0.tar.gz",
-      "bytes": 577922,
-      "sha256": "c830b5aa11beec542cffb850757d8403aaf6cf821fe2ab716ba21b71678cbe0c",
-      "files": 98
+      "bytes": 580841,
+      "sha256": "74cae8503feedc6de93f6f5c0cfdcec1060d12720963f1efdc53679a07315812",
+      "files": 100
     }
   ],
-  "backend_tests": 109,
+  "backend_tests": 117,
   "postgres_tests": 19,
   "browser_workflows": 29,
   "private_runtime_files_excluded": true,
   "installed_wheel_smoke": true,
-  "remote_ci_run": false,
+  "remote_ci_run": true,
   "container_run_locally": false,
   "publicly_deployed": false,
   "frontend_revision": "Final UI polish: narrow-drawer name wrapping, shared confirmation cards, mobile Automation layout and current guide copy",
@@ -44,5 +44,13 @@
   "recovery_api_tests": 2,
   "handover_api_tests": 9,
   "handover_review_findings_fixed": 3,
-  "final_ui_review_findings_fixed": 4
+  "final_ui_review_findings_fixed": 4,
+  "backend_coverage_percent": 83,
+  "current_candidate_remote_ci_passed": false,
+  "remote_ci_commit": "334152c3ef050fc488ddb608150f8bdc27eae965",
+  "remote_ci_url": "https://github.com/bitwindamountains/TindaBot/actions/runs/37754352899",
+  "deployment_review_findings_fixed": 4,
+  "local_python_version": "3.12.10",
+  "target_python_version": "3.12.15",
+  "target_python_verified": false
 }

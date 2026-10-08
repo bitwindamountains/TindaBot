@@ -1,6 +1,6 @@
 # Deployment handoff
 
-Prepared 4 October 2026. This is a locally verified release candidate for staging deployment. Hosting, live provider acceptance, and public launch have not been performed.
+Reviewed 8 October 2026. This is a locally verified release candidate for staging deployment. Hosting, live provider acceptance, and public launch have not been performed. See the [deployment readiness review](DEPLOYMENT_REVIEW.md) for current evidence and release blockers.
 
 ## Release contents
 
@@ -50,10 +50,10 @@ Run `uv run tindabot doctor` to check the configured environment. It reports mis
 
 ## Staging and promotion
 
-1. Publish the reviewed revision to the chosen private repository and run remote CI. Record the revision and release artifact hashes. Local build output is in `dist/`.
+1. Push the reviewed revision to the existing repository and require successful CI for that exact commit. The successful run on `334152c` predates the current changes. Record the revision and release artifact hashes. Local build output is in `dist/`.
 2. Configure an isolated staging database and test provider accounts. Keep real customer traffic disconnected. For a credentials-free infrastructure smoke test use development mode with dry-run delivery; this is not production acceptance.
 3. Deploy the API and run one coordinated `alembic upgrade head` pre-deploy step. Verify `/healthz`, `/readyz`, `/`, and the workspace assets over HTTPS.
-4. Deploy one compatible worker. Verify `/admin/health`, queue delay, and the worker heartbeat. Keep API and worker on the same revision/configuration.
+4. Deploy one compatible worker. Verify `/admin/health`, queue delay, and the worker heartbeat. Keep API and worker on the same revision/configuration. The worker waits without updating its heartbeat or processing jobs until the database reports the required schema, then resumes automatically.
 5. Open the workspace. Confirm preview labeling, connect with the operator token, then verify a permitted test checkout, order details, status conflict handling, stock adjustment, Sheet projection, seller notification, and human handover.
 6. Test automation pause: queued Messenger replies are suppressed; a send already in progress may finish. Existing orders, Sheet exports, and emails continue. Resuming does not replay suppressed messages.
 7. Exercise backup/restore, monitoring delivery/escalation, and application rollback on the selected infrastructure. Repeat the documented load probe on staging.
@@ -70,4 +70,6 @@ Run `uv run tindabot doctor` to check the configured environment. It reports mis
 
 ## Remaining external evidence
 
-Docker/Podman is unavailable locally, so the container is checked by the configured CI job rather than a local run. Remote CI has not run. No real Meta/Google/SMTP account acceptance, hosted migration/rollback, or physical mobile-device performance test has been completed. These are explicit release gates, not inferred successes from local tests.
+Docker/Podman is unavailable locally. [Remote CI on `334152c`](https://github.com/bitwindamountains/TindaBot/actions/runs/37754352899) passed, including its container build and API readiness check. The current revision still requires its own CI run, including the new worker heartbeat check and Python 3.12.15 runtime. No real Meta/Google/SMTP account acceptance, hosted migration/rollback, or physical mobile-device performance test has been completed.
+
+Render now requests Python 3.12.15, a [Python security release](https://www.python.org/downloads/release/python-31215/). CI obtains it through `actions/setup-python`; the pinned uv version's bundled download catalog stops at 3.12.14. Local Windows tests still use 3.12.10. Verify the target runtime and full CI before promotion; passing dependency audits alone does not validate the interpreter or base image.

@@ -27,7 +27,7 @@ envVarGroups:
   - name: tindabot-production
     envVars:
       - key: PYTHON_VERSION
-        value: 3.12.10
+        value: 3.12.15
       - key: APP_ENV
         value: production
       - key: DELIVERY_MODE

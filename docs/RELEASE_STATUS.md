@@ -2,7 +2,7 @@
 
 Date: 8 October 2026<br>
 Version: 0.1.0  
-Decision: **locally verified release candidate, prepared for staging deployment; public launch requires external setup and acceptance.** See the [deployment handoff](DEPLOYMENT.md).
+Decision: **locally verified release candidate, prepared for staging deployment; public launch requires external setup and acceptance.** See the [deployment handoff](DEPLOYMENT.md) and [latest readiness review](DEPLOYMENT_REVIEW.md).
 
 ## Delivered
 
@@ -36,7 +36,7 @@ Key scope decisions made during implementation:
 ## Validation evidence
 
 - Python 3.12 local test suite includes real PostgreSQL 17 tests for concurrent first deliveries, competing purchases, repeated confirmations, row locking, queue claims, migrations, and repeated seller commands.
-- Latest full run: **109 tests passed, no skips**, including nineteen PostgreSQL tests and an HTTP API/worker subprocess restart test. Coverage is 81%. The PostgreSQL cases include Manila date grouping, customer-name search and both claim/erasure interleavings, concurrent refund retries/competing commands, and private activity-table grants. [JUnit evidence](validation/handover-review-backend-tests.xml).
+- Latest full run: **117 tests passed, no skips**, including nineteen PostgreSQL tests and an HTTP API/worker subprocess restart test. Coverage is 83%. The PostgreSQL cases include Manila date grouping, customer-name search and both claim/erasure interleavings, concurrent refund retries/competing commands, and private activity-table grants. [JUnit evidence](validation/deployment-backend-tests.xml).
 - The latest full suite includes the earlier timestamp/diagnostic regressions plus older-order visibility, filtered cursor paging, tie ordering, insertion boundaries and preservation of dashboard totals.
 - Twenty-nine Chromium browser workflows cover order progression, inventory, automation, complete filtered CSV export, connection/error/loading states, light/dark accessibility, keyboard operation, 320/390px layouts, retained idempotency IDs on live-API retries using mock responses, chart exploration, order sorting, glass quick actions, and ambient motion controls. The handover cases verify explicit confirmation, STOP wording, stale resume handling, count updates, pagination, safe rendering and a saved resume followed by a failed queue refresh. The [handover review](HANDOVER_REVIEW.md) also verifies STOP preservation and rejection of resume while incoming work remains pending or failed. The delivery recovery cases verify pagination, acknowledgement, stable command IDs after response failures, mobile layouts and both themes. The journal cases verify private notes, partial-to-full refunds, queue clearing, safe text rendering and retained command IDs after a failed response. They also verify Back/Forward context and privacy, connected pagination, server search, and restoration of loaded pages. Additional checks exercise real WebGL drawing/pause, refresh preservation, canvas disposal, context loss, and no-download fallbacks. Automated axe checks reported no A/AA violations in the tested views; this is not a blanket accessibility certification. [Browser evidence](validation/ui-tests.json).
 - Ten-minute localhost soak completed at **10 events/second: 6,000 accepted and processed events, 6,000 dry-run replies, zero HTTP errors, and 32 ms p95 acknowledgement latency**. Maximum acknowledgement was 1.75 seconds; maximum sampled inbox age was 10.84 seconds during concurrent local test activity. The queue fully drained. This establishes local durable intake behavior, not hosted or real-provider reply latency. [Raw load report](validation/local-load.json).
@@ -46,12 +46,12 @@ Key scope decisions made during implementation:
 - A custom-format PostgreSQL backup restored into a separate database; catalog row count and migration version were verified. This local drill does not establish hosted RPO/RTO or off-site backup coverage.
 - Provider adapter tests use HTTP mocks and fake Sheets. No live Meta, Google Sheets, or SMTP acceptance test has been performed.
 - Docker is unavailable in this workspace, so the Docker image and Compose configuration have not been executed locally. CI includes a container build/readiness check. The Render Blueprint passed local validation against [Render's published JSON schema](https://render.com/schema/render.yaml.json); see [validation evidence](validation/render-blueprint.json). No resources have been provisioned.
-- CI configuration is present but has not run on a remote repository. No repository was published.
+- [Remote CI](https://github.com/bitwindamountains/TindaBot/actions/runs/37754352899) passed on earlier commit `334152c`, including its Docker build/API readiness check. The current local candidate still requires CI on its exact revision, including the new worker smoke and Python 3.12.15 checks.
 - The suite currently emits a third-party Starlette TestClient deprecation notice for httpx; tests pass. Migration to its replacement test transport can follow once compatibility is verified.
 
 Code coverage is diagnostic, not evidence that every operational gate has passed. The provider adapters still need actual account acceptance tests.
 
-Latest browser run: all 21 workflows passed, including the real software-WebGL test with its four-minute overall allowance. The journal workflows were checked again after the final typography adjustment. The initial concurrent backend run had PostgreSQL timeouts during software rendering; the isolated full backend rerun passed all 92 cases with no skips. These local checks are not a hosted or physical-device performance guarantee.
+Latest browser baseline: all 29 workflows passed, followed by 8 final UI polish checks. This deployment review changed no UI assets; it reran the full backend suite independently of software rendering, with all 117 cases passing. These local checks are not a hosted or physical-device performance guarantee.
 
 ## Remaining launch gates
 
@@ -65,7 +65,7 @@ Latest browser run: all 21 workflows passed, including the real software-WebGL t
 | Backups | Configure scheduled encrypted off-site backups and independent deletion-ledger retention. Exercise restore on the selected hosted infrastructure and agree RPO/RTO. |
 | Monitoring | Connect the external health checker and platform failure alerts to a real operator notification channel; test delivery and escalation. |
 | Security | Verify real DB role privileges, Sheet protected ranges/sharing, secret rotation, and provider logging settings. |
-| Deployment validation | Build/run the Docker image or verify native Render deployment; rehearse compatible API/worker promotion and application rollback on staging. |
+| Deployment validation | Pass CI on the reviewed revision, including Python 3.12.15 and API/worker container checks, then verify native Render deployment; rehearse compatible API/worker promotion and application rollback on staging. |
 | Load and pilot | Repeat the successful local 10-events/second, ten-minute probe on staging, measure actual response/export latency, then complete five business days with one supervised seller. |
 
 The configuration doctor confirms that the external provider credentials and privacy URL are absent in this workspace. A gitignored local `.env` was prepared with independently generated operator, status, and verification tokens; their values were not displayed. Default delivery remains `dry_run`; no paid resources were created and no real customer messages or emails were sent.

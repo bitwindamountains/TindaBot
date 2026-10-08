@@ -358,6 +358,10 @@ def run():
     try:
         while not stopping:
             try:
+                if not db.schema_ready():
+                    log.error("worker_schema_not_ready")
+                    time.sleep(settings.worker_poll_seconds)
+                    continue
                 with db.sessions.begin() as session:
                     insert_once(session, Record, {"key": "worker-heartbeat", "value": {}}, "key")
                     session.get(Record, "worker-heartbeat").updated_at = time.time()
