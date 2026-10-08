@@ -301,6 +301,17 @@ def test_new_activity_table_is_not_granted_to_public(pgdb):
         assert grants == []
 
 
+def test_handover_query_and_stale_resume_on_postgres(pgdb, settings):
+    from test_handover import (
+        test_handover_operator_only_resume_checks_latest_message_and_sends_nothing,
+    )
+
+    with TestClient(create_app(settings, pgdb)) as client:
+        test_handover_operator_only_resume_checks_latest_message_and_sends_nothing(
+            client, pgdb, settings
+        )
+
+
 @pytest.mark.parametrize("same_command", [True, False])
 def test_concurrent_delivery_recovery_has_one_audit(pgdb, settings, same_command):
     from fastapi.testclient import TestClient

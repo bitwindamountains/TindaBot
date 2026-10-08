@@ -5,38 +5,40 @@
   "artifacts": [
     {
       "file": "tindabot-0.1.0-py3-none-any.whl",
-      "bytes": 443672,
-      "sha256": "a7873b7c4e3bd2961f9e9a6be44072d4160f4c1b9c11c4fe0bcf6af66eee7338",
-      "files": 35
+      "bytes": 447250,
+      "sha256": "03d685866cc971d73880541d3b8cf80b862f73e44116a9004972a84232ef18c1",
+      "files": 37
     },
     {
       "file": "tindabot-0.1.0.tar.gz",
-      "bytes": 568274,
-      "sha256": "7f043038faf13ddbe6c23ab087f804069286d72b9f7f4f44caf17bf43ad60a6c",
-      "files": 90
+      "bytes": 573886,
+      "sha256": "f44b5c94952d7218319eb6661c039bcf0af5e5b3f24bf876181051346f16bf8b",
+      "files": 95
     }
   ],
-  "backend_tests": 96,
-  "postgres_tests": 15,
-  "browser_workflows": 23,
+  "backend_tests": 102,
+  "postgres_tests": 16,
+  "browser_workflows": 25,
   "private_runtime_files_excluded": true,
   "installed_wheel_smoke": true,
   "remote_ci_run": false,
   "container_run_locally": false,
   "publicly_deployed": false,
-  "frontend_revision": "Delivery recovery: redacted inspection, pagination, confirmed retry/suppression, stable command IDs and operator audit records",
+  "frontend_revision": "Human handover queue: tracked counts, last contact, Page inbox link, confirmed version-checked resume",
   "workspace_api_tests": 9,
   "backend_baseline_date": "2026-10-08",
   "stock_adjustment_boundary_check": true,
   "review_findings_fixed": 4,
   "browser_validation": {
-    "full_run_passed": 23,
+    "full_run_passed": 25,
     "full_run_timeout": 0,
     "journal_follow_up_passed": 2,
     "shader_overall_allowance_seconds": 240,
-    "recovery_follow_up_passed": 2
+    "recovery_follow_up_passed": 2,
+    "handover_follow_up_passed": 2
   },
   "schema_revision": "0003",
   "journal_api_tests": 11,
-  "recovery_api_tests": 2
+  "recovery_api_tests": 2,
+  "handover_api_tests": 5
 }

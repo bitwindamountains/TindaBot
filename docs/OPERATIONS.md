@@ -40,6 +40,8 @@ Resolve outbox jobs using `POST /admin/jobs/{id}/resolve` with `{"action":"suppr
 
 Use `POST /admin/automation` with `{"enabled":false}` to disable automatic conversation handling/sending. Webhook intake continues. Use `POST /admin/conversations/{psid}/pause` with `{"enabled":true}` for one customer. Keep PSIDs out of public tickets and access logs.
 
+The workspace now offers **Customers needing help** in Overview and Automation for tracked handovers. Resume only after handling the request; the UI checks the conversation version and sends no message. Existing unmarked pauses remain outside this queue. See [handover workflow and rollout limits](HANDOVER_QUEUE.md).
+
 ## Backup and restore
 
 Install PostgreSQL client tools of the same or newer major version as the source server. Supply `BACKUP_DATABASE_URL` privately in the environment; use a direct or session connection. The script places passwords in child-process environment variables, not command arguments.

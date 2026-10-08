@@ -14,7 +14,8 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import Integer, and_, cast, func, or_, select
 
-from tindabot.db import Inbox, Order, OrderActivity, Outbox, Product, Record
+from tindabot.db import Conversation, Inbox, Order, OrderActivity, Outbox, Product, Record
+from tindabot.handover import waiting
 from tindabot.orders import refund_total
 from tindabot.recovery import inspect_job
 
@@ -48,6 +49,41 @@ def activity_page(session, order_id, before=None):
 
 
 def register_workspace(app, db, settings, operator):
+    @app.get("/admin/workspace/handovers", dependencies=[Depends(operator)])
+    def handovers(response: Response, after: str | None = Query(default=None, max_length=150)):
+        response.headers["Cache-Control"] = "no-store"
+        query = select(Conversation).where(
+            *waiting(), Conversation.key.startswith(settings.meta_page_id + ":", autoescape=True)
+        )
+        if after:
+            query = query.where(Conversation.key > after)
+        with db.sessions() as session:
+            rows = session.scalars(query.order_by(Conversation.key).limit(51)).all()
+            names = {
+                c.key: session.scalar(
+                    select(Order.details["name"].as_string())
+                    .where(Order.conversation_key == c.key, Order.anonymized.is_(False))
+                    .order_by(Order.created_at.desc(), Order.id.desc())
+                    .limit(1)
+                )
+                for c in rows[:50]
+            }
+            return {
+                "conversations": [
+                    {
+                        "psid": c.psid,
+                        "name": c.context.get("name") or names[c.key] or "Customer",
+                        "version": c.version,
+                        "last_customer_at": c.last_customer_at,
+                        "reason": c.context["handover"]["reason"],
+                        "since": c.context["handover"]["since"],
+                    }
+                    for c in rows[:50]
+                ],
+                "next_cursor": rows[49].key if len(rows) > 50 else None,
+                "inbox_url": "https://business.facebook.com/latest/inbox/all/",
+            }
+
     @app.get("/admin/workspace/jobs", dependencies=[Depends(operator)])
     def delivery_jobs(
         response: Response,
@@ -272,6 +308,14 @@ def register_workspace(app, db, settings, operator):
                     "delivery_uncertain": jobs.get("uncertain", 0),
                 },
                 "queue": sum(jobs.get(status, 0) for status in ("pending", "processing")),
+                "handover_count": session.scalar(
+                    select(func.count())
+                    .select_from(Conversation)
+                    .where(
+                        *waiting(),
+                        Conversation.key.startswith(settings.meta_page_id + ":", autoescape=True),
+                    )
+                ),
             }
 
     @app.get("/admin/workspace/orders/{order_id}", dependencies=[Depends(operator)])

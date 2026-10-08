@@ -43,6 +43,7 @@ def erase_customer(session, conversation_key, now=None):
     if any(job.status == "processing" for job in jobs):
         raise ValueError("delivery_in_progress")
     conversation.context, conversation.state, conversation.paused = {}, "IDLE", True
+    conversation.version += 1
     for event in session.scalars(select(Inbox).where(Inbox.conversation_key == conversation_key)):
         event.payload, event.status = {}, "expired"
     for job in jobs:
