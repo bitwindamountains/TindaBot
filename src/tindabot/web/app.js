@@ -1,4 +1,5 @@
 import {icon} from './icons.js';
+import {deliveryReview} from './recovery.js';
 import {demoSnapshot, demoOrder, demoStatus, demoStock, demoAutomation, demoNote, demoRefund} from './demo.js';
 import {heroBackdrop, observeScenes, toggleAmbient} from './motion.js';
 
@@ -214,6 +215,7 @@ function automation() {
     <div class="setting-row"><div><h3>Delivery mode</h3><p>${d.delivery_mode === 'live' ? 'Messages can be sent to customers.' : 'Messages are recorded without being sent to customers.'}</p></div><span class="badge">${d.delivery_mode === 'live' ? 'Live' : 'Dry run'}</span></div>
     <div class="setting-row"><div><h3>Worker heartbeat</h3><p>${isDemo() ? 'Illustrative activity for this preview.' : d.worker_age_seconds === null ? 'No heartbeat received. Start the worker and refresh.' : `Last received ${Math.floor(d.worker_age_seconds)} seconds before this refresh.`}</p></div><span class="badge ${healthy ? 'badge-delivered' : 'badge-pending'}">${isDemo() ? 'Sample' : healthy ? 'Recent' : 'Check worker'}</span></div>
     <div class="setting-row"><div><h3>Delivery queue</h3><p>${d.failures ? `${d.failures} failed or uncertain jobs require operator review. Check the operations runbook before retrying.` : 'No failed or uncertain jobs in this snapshot.'}</p></div><span class="badge numeric">${d.queue} waiting</span></div>
+    <div class="setting-row"><div><h3>Resolve delivery issues</h3><p>Inspect failed or uncertain deliveries and choose the next step.</p></div>${button('Review deliveries', 'deliveries')}</div>
     <div class="setting-row"><p>Per-conversation pauses and human handover are still respected. Settings refresh on request.</p></div></section>${automationChecklist(d, healthy)}</div>`;
 }
 async function api(path, options = {}, token = state.token) {
@@ -423,6 +425,7 @@ document.addEventListener('click', async event => {
   if (node.dataset.filter) { state.filter = node.dataset.filter; return updateOrderView(`[data-filter="${state.filter}"]`); }
   if (node.dataset.order) return showOrder(node.dataset.order);
   const action = node.dataset.action;
+  if (action === 'deliveries') return deliveryReview({api, openModal, escape, date, button, isDemo, refresh, toast, busy});
   if (action === 'clear-search') { state.query = ''; $('#search').value = ''; return updateOrderView('#search'); }
   if (action === 'commands') return commands();
   if (action === 'motion') return toggleAmbient();

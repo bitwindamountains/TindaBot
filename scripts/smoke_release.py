@@ -14,7 +14,7 @@ from fastapi.testclient import TestClient
 
 import tindabot
 from tindabot.config import Settings
-from tindabot.db import Conversation, Order
+from tindabot.db import Conversation, Order, Outbox
 from tindabot.main import create_app
 
 
@@ -49,6 +49,7 @@ def main():
                 "workspace.css",
                 "theme.js",
                 "app.js",
+                "recovery.js",
                 "icons.js",
                 "demo.js",
                 "favicon.svg",
@@ -122,6 +123,32 @@ def main():
             detail = client.get("/admin/workspace/orders/smoke-order", headers=auth).json()
             assert detail["refunded_minor"] == 10000
             assert [event["kind"] for event in detail["activity"]] == ["refund", "note"]
+            with client.app.state.db.sessions.begin() as session:
+                session.add(
+                    Outbox(
+                        business_key="smoke-failure",
+                        lane="email",
+                        destination="email",
+                        status="uncertain",
+                        attempts=1,
+                        error="smtp_delivery_unknown",
+                    )
+                )
+            jobs = client.get("/admin/workspace/jobs", headers=auth).json()["jobs"]
+            assert len(jobs) == 1
+            resolution = {
+                "command_id": "smoke-recovery",
+                "expected_revision": jobs[0]["revision"],
+                "action": "suppress",
+            }
+            for _ in range(2):
+                assert (
+                    client.post(
+                        f"/admin/jobs/{jobs[0]['id']}/resolve", headers=auth, json=resolution
+                    ).status_code
+                    == 200
+                )
+            assert client.get("/admin/workspace/jobs", headers=auth).json()["jobs"] == []
     report = {
         "installed_wheel": True,
         "migrations": "0003",
@@ -131,6 +158,7 @@ def main():
         "diagnostic_contract_verified": True,
         "all_time_queue_contract_verified": True,
         "notes_refund_and_activity_verified": True,
+        "delivery_recovery_verified": True,
         "providers_called": False,
         "scope": "Installed wheel and migrations in isolated local Python environment; not container or hosting validation",
     }

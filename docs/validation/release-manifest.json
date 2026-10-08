@@ -5,36 +5,38 @@
   "artifacts": [
     {
       "file": "tindabot-0.1.0-py3-none-any.whl",
-      "bytes": 439815,
-      "sha256": "c4da986348337b21c6a180f0a65bdf54175f8db793962e24002abb853f02e0f1",
-      "files": 33
+      "bytes": 443672,
+      "sha256": "a7873b7c4e3bd2961f9e9a6be44072d4160f4c1b9c11c4fe0bcf6af66eee7338",
+      "files": 35
     },
     {
       "file": "tindabot-0.1.0.tar.gz",
-      "bytes": 562957,
-      "sha256": "a95ee0db12e4cddbf3d19df6165642dd03d76fb2becd40e9edb15dd9fba76e91",
-      "files": 85
+      "bytes": 568274,
+      "sha256": "7f043038faf13ddbe6c23ab087f804069286d72b9f7f4f44caf17bf43ad60a6c",
+      "files": 90
     }
   ],
-  "backend_tests": 92,
-  "postgres_tests": 13,
-  "browser_workflows": 21,
+  "backend_tests": 96,
+  "postgres_tests": 15,
+  "browser_workflows": 23,
   "private_runtime_files_excluded": true,
   "installed_wheel_smoke": true,
   "remote_ci_run": false,
   "container_run_locally": false,
   "publicly_deployed": false,
-  "frontend_revision": "Private order notes and activity timeline; partial/full external refund tracking with safe retries",
+  "frontend_revision": "Delivery recovery: redacted inspection, pagination, confirmed retry/suppression, stable command IDs and operator audit records",
   "workspace_api_tests": 9,
   "backend_baseline_date": "2026-10-08",
   "stock_adjustment_boundary_check": true,
   "review_findings_fixed": 4,
   "browser_validation": {
-    "full_run_passed": 21,
+    "full_run_passed": 23,
     "full_run_timeout": 0,
     "journal_follow_up_passed": 2,
-    "shader_overall_allowance_seconds": 240
+    "shader_overall_allowance_seconds": 240,
+    "recovery_follow_up_passed": 2
   },
   "schema_revision": "0003",
-  "journal_api_tests": 11
+  "journal_api_tests": 11,
+  "recovery_api_tests": 2
 }
