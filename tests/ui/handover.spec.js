@@ -53,6 +53,7 @@ test('connected handovers paginate, escape names and reject stale resume', async
   await expect(page.locator('#handover-error')).toContainText('refresh');
   await page.getByRole('button', {name: 'Keep paused'}).click();
   await page.getByRole('button', {name: 'Refresh handovers'}).click();
+  await expect(page.getByRole('button', {name: 'Review resume'})).toHaveCount(1);
   await page.getByRole('button', {name: 'Review resume'}).click();
   await page.getByRole('checkbox').check();
   await page.getByRole('button', {name: 'Resume bot', exact: true}).click();

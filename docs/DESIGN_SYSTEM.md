@@ -87,3 +87,5 @@ Orders now defaults to All dates, with Needs attention and Reporting period scop
 The order drawer now includes a private note composer and a paged activity timeline. Refund-required orders show recorded and remaining amounts in a copper-tinted card. The recording form distinguishes an external payment from a system action, requires an explicit confirmation, and keeps failed submissions available for retry. The refund card and journal are checked for contrast in light/dark themes and for overflow on a 390px viewport.
 
 See `FEATURE_REVIEW.md` for findings, completed changes, and the remaining feature priorities.
+
+The [final UI review](FINAL_UI_REVIEW.md) unifies confirmation cards across refunds, handovers and recovery; wraps long names inside narrow drawers; keeps mobile status badges intact; and separates delivery-review actions from their descriptions. Checkbox visuals are 20px inside a fully clickable padded label of at least 44px height, with a visible focus ring. These changes preserve the established palette and motion behavior.

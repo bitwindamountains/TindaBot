@@ -5,42 +5,44 @@
   "artifacts": [
     {
       "file": "tindabot-0.1.0-py3-none-any.whl",
-      "bytes": 447631,
-      "sha256": "f8dfd429e70ba20cc3a9fa7147428a8998280ad3dab2096723c6ffd9205aeaee",
+      "bytes": 447838,
+      "sha256": "05d95c2ac3c3b034ef94527534c1c8082ce8674798b70d14bbeff801deaed416",
       "files": 37
     },
     {
       "file": "tindabot-0.1.0.tar.gz",
-      "bytes": 575921,
-      "sha256": "773ed4e57dea59ab9ccfbb7db78ca3f317d1ef609872acacd92e73bf92811faa",
-      "files": 96
+      "bytes": 577922,
+      "sha256": "c830b5aa11beec542cffb850757d8403aaf6cf821fe2ab716ba21b71678cbe0c",
+      "files": 98
     }
   ],
   "backend_tests": 109,
   "postgres_tests": 19,
-  "browser_workflows": 26,
+  "browser_workflows": 29,
   "private_runtime_files_excluded": true,
   "installed_wheel_smoke": true,
   "remote_ci_run": false,
   "container_run_locally": false,
   "publicly_deployed": false,
-  "frontend_revision": "Handover review fixes: preserve STOP, block resume on unprocessed activity, separate saved resume from refresh failure",
+  "frontend_revision": "Final UI polish: narrow-drawer name wrapping, shared confirmation cards, mobile Automation layout and current guide copy",
   "workspace_api_tests": 9,
   "backend_baseline_date": "2026-10-08",
   "stock_adjustment_boundary_check": true,
   "review_findings_fixed": 4,
   "browser_validation": {
-    "full_run_passed": 26,
+    "full_run_passed": 29,
     "full_run_timeout": 0,
     "journal_follow_up_passed": 2,
     "shader_overall_allowance_seconds": 240,
     "recovery_follow_up_passed": 2,
     "handover_follow_up_passed": 2,
-    "handover_review_passed": 3
+    "handover_review_passed": 3,
+    "final_ui_follow_up_passed": 8
   },
   "schema_revision": "0003",
   "journal_api_tests": 11,
   "recovery_api_tests": 2,
   "handover_api_tests": 9,
-  "handover_review_findings_fixed": 3
+  "handover_review_findings_fixed": 3,
+  "final_ui_review_findings_fixed": 4
 }
