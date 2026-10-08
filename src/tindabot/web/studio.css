@@ -406,8 +406,11 @@ tbody tr:hover td:first-child { box-shadow: inset 3px 0 var(--accent); }
 .refund-context { display: grid; gap: .5rem; padding-bottom: 1.25rem; }
 .refund-context strong { font-family: var(--font-editorial); font-size: 1.75rem; font-weight: 400; }
 #refund-form > label { display: block; margin-top: 1.25rem; }
-#refund-form .refund-confirm { display: flex; align-items: center; gap: .75rem; font-size: .8125rem; line-height: 1.5; }
-.refund-confirm input { min-width: 44px; min-height: 44px; accent-color: var(--accent); }
+#refund-form .refund-confirm, .dialog-body .refund-confirm { display: flex; align-items: flex-start; gap: .75rem; min-height: 44px; padding: 1rem; margin-top: 1.5rem; border: 1px solid var(--border-subtle); border-radius: .75rem; background: var(--surface-sunken); font-size: .8125rem; line-height: 1.5; cursor: pointer; }
+.refund-confirm input { width: 20px; height: 20px; min-width: 20px; min-height: 20px; flex: 0 0 20px; margin: 0; accent-color: var(--accent); }
+.refund-confirm span { min-width: 0; overflow-wrap: anywhere; }
+.refund-confirm:focus-within { outline: 2px solid var(--focus); outline-offset: 3px; }
+.setting-row > .badge { flex-shrink: 0; white-space: nowrap; }
 .inventory-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: .5rem; background: var(--surface); border: 1px solid var(--border-subtle); border-radius: .75rem; }
 .inventory-toolbar .order-sort { padding-right: .5rem; }
 .catalog-caption { margin: .75rem 0 1.5rem; color: var(--text-muted); font-size: .75rem; }
@@ -446,9 +449,16 @@ tbody tr:hover td:first-child { box-shadow: inset 3px 0 var(--accent); }
   .health-totals { gap: 2.5rem; }
   .health-totals strong { font-size: 1.75rem; }
   .catalog-caption { font-size: .6875rem; }
+  .setting-row-action { flex-direction: column; align-items: stretch; gap: 1rem; }
+  .setting-row-action .button { align-self: flex-start; }
+  .dialog-actions { flex-wrap: wrap; }
 }
 
-.recovery-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.recovery-heading { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: .5rem 1rem; }
+.recovery-heading h3 { flex: 1 1 12rem; min-width: 0; overflow-wrap: anywhere; margin-bottom: .5rem; }
+.recovery-heading .badge { flex-shrink: 0; white-space: nowrap; }
 .recovery-list { margin-top: 24px; }
 .recovery-list .detail-section { border-bottom: 1px solid var(--border-subtle); padding-bottom: 20px; }
+.recovery-list .detail-section + .detail-section { border-top: 0; margin-top: 0; padding-top: 24px; }
 .recovery-list p { overflow-wrap: anywhere; }
+.dialog-body > p { overflow-wrap: anywhere; }
