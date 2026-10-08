@@ -1,13 +1,18 @@
 """Authenticated, bounded read models and a public, data-free workspace shell."""
 
+import base64
+import hashlib
+import json
+import math
 import time
 from pathlib import Path
+from typing import Literal
 
 from fastapi import Depends, HTTPException, Query, Response
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import Integer, cast, func, select
+from sqlalchemy import Integer, and_, cast, func, or_, select
 
 from tindabot.db import Inbox, Order, Outbox, Product, Record
 
@@ -38,12 +43,79 @@ def register_workspace(app, db, settings, operator):
         )
 
     @app.get("/admin/workspace", dependencies=[Depends(operator)])
-    def snapshot(response: Response, days: int = Query(default=7, ge=1, le=30)):
+    def snapshot(
+        response: Response,
+        days: int = Query(default=7, ge=1, le=30),
+        scope: Literal["period", "all", "open"] = "period",
+        status: Literal["all", "pending", "confirmed", "shipped", "delivered", "cancelled"] = "all",
+        payment: Literal["all", "unpaid", "paid", "refund_required"] = "all",
+        sort: Literal["newest", "oldest", "highest", "lowest"] = "newest",
+        q: str = Query(default="", max_length=200),
+        cursor: str | None = Query(default=None, max_length=2048),
+    ):
         response.headers["Cache-Control"] = "no-store"
         now = time.time()
         today = int((now + MANILA_OFFSET) // DAY)
         start = (today - days + 1) * DAY - MANILA_OFFSET
         period = (Order.created_at >= start, Order.created_at <= now)
+        signature = hashlib.sha256(
+            json.dumps([days, scope, status, payment, sort, q]).encode()
+        ).hexdigest()
+        anchor, after = now, None
+        if cursor:
+            try:
+                decoded = json.loads(base64.urlsafe_b64decode(cursor))
+                anchor, value, order_id, fingerprint = decoded
+                if (
+                    fingerprint != signature
+                    or not isinstance(anchor, (int, float))
+                    or not math.isfinite(anchor)
+                    or not 0 <= anchor <= now
+                    or not isinstance(value, (int, float))
+                    or not math.isfinite(value)
+                    or not isinstance(order_id, str)
+                    or not 1 <= len(order_id) <= 36
+                ):
+                    raise ValueError("invalid_cursor")
+                after = (value, order_id)
+            except (ValueError, TypeError, OverflowError) as exc:
+                raise HTTPException(422, "Invalid order cursor") from exc
+        order_scope = [Order.created_at <= anchor]
+        if scope == "period":
+            anchor_day = int((anchor + MANILA_OFFSET) // DAY)
+            order_scope.append(Order.created_at >= (anchor_day - days + 1) * DAY - MANILA_OFFSET)
+        elif scope == "open":
+            order_scope.append(
+                or_(
+                    Order.status.in_(["pending", "confirmed", "shipped"]),
+                    Order.payment_status == "refund_required",
+                    and_(Order.payment_status == "unpaid", Order.status != "cancelled"),
+                )
+            )
+        if payment != "all":
+            order_scope.append(Order.payment_status == payment)
+        if q.strip():
+            search = q.strip().lower()
+            order_scope.append(
+                or_(
+                    func.lower(Order.code).contains(search, autoescape=True),
+                    func.lower(Order.details["name"].as_string()).contains(search, autoescape=True),
+                )
+            )
+        filters = [*order_scope]
+        if status != "all":
+            filters.append(Order.status == status)
+        column = Order.total_minor if sort in {"highest", "lowest"} else Order.created_at
+        descending = sort in {"newest", "highest"}
+        page_filters = [*filters]
+        if after:
+            value, order_id = after
+            page_filters.append(
+                or_(
+                    column < value if descending else column > value,
+                    and_(column == value, Order.id > order_id),
+                )
+            )
         with db.sessions() as session:
             count = session.scalar(select(func.count()).select_from(Order).where(*period))
             value = session.scalar(
@@ -52,7 +124,7 @@ def register_workspace(app, db, settings, operator):
                 )
             )
             pending = session.scalar(
-                select(func.count()).select_from(Order).where(*period, Order.status == "pending")
+                select(func.count()).select_from(Order).where(Order.status == "pending")
             )
             active = session.scalar(
                 select(func.count()).select_from(Product).where(Product.active.is_(True))
@@ -66,8 +138,28 @@ def register_workspace(app, db, settings, operator):
                 ).all()
             )
             orders = session.scalars(
-                select(Order).where(*period).order_by(Order.created_at.desc(), Order.id).limit(200)
+                select(Order)
+                .where(*page_filters)
+                .order_by(column.desc() if descending else column.asc(), Order.id)
+                .limit(201)
             ).all()
+            has_more = len(orders) > 200
+            orders = orders[:200]
+            next_cursor = None
+            if has_more:
+                last = orders[-1]
+                cursor_value = (
+                    last.total_minor if sort in {"highest", "lowest"} else last.created_at
+                )
+                next_cursor = base64.urlsafe_b64encode(
+                    json.dumps([anchor, cursor_value, last.id, signature]).encode()
+                ).decode()
+            order_count = session.scalar(select(func.count()).select_from(Order).where(*filters))
+            order_counts = dict(
+                session.execute(
+                    select(Order.status, func.count()).where(*order_scope).group_by(Order.status)
+                ).all()
+            )
             products = session.scalars(
                 select(Product).order_by(Product.name, Product.sku).limit(500)
             ).all()
@@ -108,7 +200,10 @@ def register_workspace(app, db, settings, operator):
                     }
                     for order in orders
                 ],
-                "orders_truncated": count > len(orders),
+                "orders_truncated": has_more,
+                "order_total": order_count,
+                "order_counts": order_counts,
+                "next_cursor": next_cursor,
                 "products": [
                     {
                         "sku": p.sku,

@@ -82,4 +82,6 @@ Validation artifacts: `validation/workspace-light.png`, `validation/workspace-da
 
 Orders combine independent fulfillment and payment filters. Payment labels remain visible with amounts on mobile, and CSV exports include payment status. Inventory supports empty-shelf and inactive views, name/stock/price sorting, and a live adjustment estimate with keyboard-accessible shortcuts. The automation screen pairs its settings with a snapshot summary and a conditional checklist; uncertain deliveries are distinct from failed incoming events and failed outbound jobs. These diagnostics describe observed state, not a claim that all integrations are healthy.
 
+Orders now defaults to All dates, with Needs attention and Reporting period scopes. Connected search and filters operate on the server, Load more orders retrieves subsequent pages, and CSV exports retrieve the whole selected result set. Pending counts cover all dates independently of financial charts. Back/Forward and section returns retain working context in tab memory; credentials and customer searches are excluded from persistent storage and browser history. Order-code targets remain at least 44 pixels wide, including shorter legacy codes.
+
 See `FEATURE_REVIEW.md` for findings, completed changes, and the remaining feature priorities.

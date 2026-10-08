@@ -17,6 +17,8 @@ Run `uv run python scripts/check_health.py` from an independent monitor every mi
 
 Watch failed/uncertain jobs, worker silence, inbox age, Sheet synchronization errors, PostgreSQL storage/connections, and token errors. The worker heartbeat is a liveness indicator, not proof that each integration is healthy. Invalid Meta credentials turn off automation in persistent DB control state; fix credentials and explicitly re-enable after verification.
 
+Seller synchronization reports separate `catalog` and `commands` outcomes under `seller_sync`, while aggregate `ok` remains false if either fails. A malformed catalog does not stop valid existing-order commands. Checkout still requires a fresh valid catalog.
+
 JSON logging uses static event/error codes and selected job IDs. API access logs are disabled in deployment commands. Never enable SQL parameter logging, raw webhook logging, or full HTTP request/response logging in production.
 
 ## Queue recovery
@@ -62,6 +64,8 @@ The backup covers PostgreSQL only. Keep a separate controlled copy of seller-own
 
 Verify the requester's identity and the seller's retention obligations before acting. Pause the conversation and wait for active deliveries to complete. `POST /admin/conversations/{psid}/erase` erases controlled personal fields and queues Sheet updates. Check that all Sheet erasure jobs actually finish; review email/provider/backups separately.
 
+Erasure locks related orders and outbound jobs, including jobs associated only by order ID. Processing jobs cause a conflict; wait for delivery reconciliation and retry. Pending/failed/uncertain jobs are suppressed and scrubbed, while delivered audit outcomes remain intact. This does not recall data already sent to a provider.
+
 The endpoint retains restricted PSID/order association metadata and an erasure ledger. Full identity unlinking is not implemented and must not be promised. Export the ledger securely before backup expiry or restoration. Failed erasure jobs are operational incidents, not successful deletion.
 
 Worker maintenance runs every minute: clears old checkout context, removes old event/reply text, anonymizes order fields after the configured period, and cancels expired unpaid orders with one stock release. Retention periods and reservation expiry must be seller-approved before production acknowledgement.
@@ -72,7 +76,9 @@ The web workspace is served at `/` on the API origin. Connect using `ADMIN_TOKEN
 
 Use **Orders** to inspect a record before confirming, marking payment received, shipping, or cancelling. Payment confirmation records the operator's verification and does not charge the customer. Cancelling a paid order flags a refund requirement; the actual refund is handled outside the app. **Inventory → Adjust stock** takes a signed quantity, applied against current stock. If the request fails after a possible write, retry in the same dialog to reuse its command ID; reconcile stock before opening a new adjustment.
 
-Order value includes shipping and unpaid orders and excludes cancelled orders. It is not settled revenue. Reports use Manila calendar days; the UI labels capped results and exports only loaded filtered rows. **Automation** reports the snapshot's worker heartbeat, queue state, and effective server-controlled automation state.
+Order value includes shipping and unpaid orders and excludes cancelled orders. It is not settled revenue. Reports use Manila calendar days; pending counts span all dates. Orders defaults to All dates, with Needs attention and Reporting period scopes. Load more orders fetches the next 200-record page; connected CSV exports fetch every matching page. Existing records can change during pagination/export, so refresh for reconciliation. **Automation** reports the snapshot's worker heartbeat, queue state, and effective server-controlled automation state.
+
+Navigation restores filters, search, sorting and loaded pages from tab memory. Back/Forward also restores scroll position. URLs and browser history do not store customer searches or tokens. Reload clears the connection and working context; cached views display their snapshot time.
 
 Protect all Orders columns and the Commands result column; share with only authorized staff. Explain that Products stock is initial inventory, not a replenishment control. Record stock reserved for this bot when the seller sells through other channels. Use idempotent operator inventory adjustments for replenishment and external sales.
 
@@ -81,6 +87,6 @@ Train staff on unique command IDs, expected versions, paid versus fulfillment st
 
 ### Workspace follow-up views
 
-- In Orders, combine fulfillment and payment filters to review unpaid orders or refunds requiring follow-up. CSV exports exactly the loaded, filtered rows and includes payment status. It is not a full-history export.
+- In Orders, combine fulfillment and payment filters with All dates or Needs attention to review older work. Connected CSV exports include all matching pages and payment status; preview exports contain only sample data.
 - In Inventory, sort by lowest stock or select Out of stock / Inactive. Adjustment shortcuts only fill the quantity; Save adjustment submits it. The estimate uses the displayed snapshot, while the server applies the signed adjustment against current stock. Each adjustment is limited to plus or minus 1,000,000 units.
 - Automation shows a snapshot and conditional next steps. Failed incoming events, failed outbound jobs, and uncertain deliveries are separate signals. Follow the reconciliation process above before retrying uncertain deliveries. A recent heartbeat does not certify provider delivery.

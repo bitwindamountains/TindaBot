@@ -1,31 +1,38 @@
 {
-  "date": "2026-10-07",
+  "date": "2026-10-08",
   "version": "0.1.0",
   "status": "Locally verified staging deployment candidate; external launch gates remain",
   "artifacts": [
     {
       "file": "tindabot-0.1.0-py3-none-any.whl",
-      "bytes": 431998,
-      "sha256": "ae6d28db32e191cfd7b716f30223ba38832eb997c4c0db7708460ef95f1f6f6e",
+      "bytes": 434756,
+      "sha256": "c21180957b712b695990ef4f6b1ccbd7d0330aef6da4ce7e2c970b3ec86bc341",
       "files": 33
     },
     {
       "file": "tindabot-0.1.0.tar.gz",
-      "bytes": 541703,
-      "sha256": "00b0be2e2fbd87ddbb84bc036bedd404cf0307b00089c9ff01521735ccf52302",
-      "files": 79
+      "bytes": 551579,
+      "sha256": "8e8df90f5e972095c421c062fd008b58d3088965f373590d8a1910d9c03c1379",
+      "files": 81
     }
   ],
-  "backend_tests": 64,
-  "postgres_tests": 7,
-  "browser_workflows": 17,
+  "backend_tests": 78,
+  "postgres_tests": 10,
+  "browser_workflows": 19,
   "private_runtime_files_excluded": true,
   "installed_wheel_smoke": true,
   "remote_ci_run": false,
   "container_run_locally": false,
   "publicly_deployed": false,
-  "frontend_revision": "Payment follow-up and CSV, stock triage and adjustment preview, automation diagnostics, live order-date contract fix",
-  "workspace_api_tests": 4,
-  "backend_baseline_date": "2026-10-04",
-  "stock_adjustment_boundary_check": true
+  "frontend_revision": "All-time order queues, server filters and cursor paging, complete filtered export, private navigation context",
+  "workspace_api_tests": 9,
+  "backend_baseline_date": "2026-10-07",
+  "stock_adjustment_boundary_check": true,
+  "review_findings_fixed": 4,
+  "browser_validation": {
+    "full_run_passed": 18,
+    "full_run_timeout": 1,
+    "isolated_shader_retry_passed": 1,
+    "shader_overall_allowance_seconds": 240
+  }
 }

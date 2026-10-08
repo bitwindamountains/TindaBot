@@ -1,6 +1,21 @@
 # Follow-up review - 7 October 2026
 
-Reviewed checkpoint: `230fb9b` (`Save TindaBot release candidate and seller workspace`). The checkpoint was committed before review. This review changes documentation only; the findings below are not fixed.
+Reviewed checkpoint: `230fb9b` (`Save TindaBot release candidate and seller workspace`). The checkpoint was committed before review. The original findings below are retained as the review record.
+
+## Resolution - 8 October 2026
+
+All four numbered findings are implemented:
+
+| Finding | Resolution | Regression evidence |
+| --- | --- | --- |
+| Erasure and order deliveries | Erasure locks the customer's orders and all related outbound jobs, refuses processing deliveries, suppresses queued work, and preserves delivered audit outcomes. Dispatch claims use the same job locks. | Order-linked Sheet/email guards and two real PostgreSQL tests for claim-first and erasure-first interleavings. |
+| Older unfinished orders | Pending counts cover all dates. Orders defaults to All dates, offers Needs attention and Reporting period scopes, and uses authenticated server search, status/payment filtering, sorting and cursor pagination. Connected CSV export follows every result page. | Older pending/refund cases, literal search, pagination ties and insertion boundaries in four sort orders, PostgreSQL JSON search, and connected browser pagination/export. |
+| Catalog/command failure coupling | Catalog refresh and command processing have separate exception handling and health fields; aggregate health remains compatible with the monitor. | Invalid catalog with successful idempotent command, recovery, and successful catalog refresh during command-provider failure. |
+| Navigation context | Section navigation creates browser history entries. Back/Forward and section returns restore filters, search and sort; cached loaded pages and Back/Forward scroll position stay in tab memory. History stores only an opaque key. | Browser navigation, reload privacy, focus restoration, and returning to a queue with multiple pages loaded. |
+
+Validation: 78 backend tests passed without skips, including 10 PostgreSQL cases. Full browser and installed-wheel evidence is recorded in `RELEASE_STATUS.md` and `validation/`. No migration or external provider action was needed.
+
+Remaining product increments are distinct from these fixes: custom date ranges, product pagination beyond the existing 500-product view, refund reconciliation, job inspection and compact layout improvements. Cursor paging excludes newly created orders after the first-page anchor; it is not a transactionally frozen report if existing orders change during browsing/export. Refresh to reconcile changed records.
 
 ## Findings in implementation order
 
@@ -59,10 +74,10 @@ Visual assessment used the saved desktop overview screenshot in `docs/validation
 - Restore filters and scroll position after returning from an order; provide a direct next actionable order flow. Add visible snapshot age and a refresh affordance near operational counts.
 - Add audited external-refund reconciliation, protected redacted job inspection, and catalog import previews using the acceptance criteria already recorded in `FEATURE_REVIEW.md`.
 
-## Verification and launch sequence
+## Original review verification and launch sequence
 
 This review ran three focused probes against a temporary SQLite database and a mocked seller adapter. They reproduced findings 1-3 without reading private configuration, touching the working shop database or contacting providers. The probes are not a PostgreSQL concurrency qualification. No production source changed and the full regression suite was not rerun.
 
-Implement findings 1-3 first with targeted regressions, including a real PostgreSQL race test for erasure. Next implement navigation and complete queues, then the remaining seller workflows and compact layout. Run the full backend/browser checks on the resulting revision before building a new release artifact.
+The recommended sequence was to implement findings 1-3 with targeted regressions, then navigation and complete queues. Those fixes and regressions are now complete as recorded above. The remaining seller workflows and compact layout are subsequent product work.
 
 Public launch still requires real Meta/Sheets/SMTP acceptance, hosted deployment/container verification, working monitoring, backup/restore acceptance and the supervised seller pilot described in `RELEASE_STATUS.md`. Existing local test evidence does not close these gates.

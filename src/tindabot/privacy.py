@@ -1,7 +1,7 @@
 import hashlib
 import time
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from tindabot.db import Conversation, Inbox, Order, Outbox, Record, enqueue
 
@@ -18,26 +18,36 @@ def erase_customer(session, conversation_key, now=None):
     )
     if not conversation:
         return {"orders": 0}
-    # Operator must resolve in-flight sends; deleting a payload while it is being
-    # sent cannot recall the copy already read by another worker.
-    active = session.scalar(
-        select(Outbox.id)
-        .where(Outbox.conversation_key == conversation_key, Outbox.status == "processing")
-        .limit(1)
-    )
-    if active:
-        raise ValueError("delivery_in_progress")
-    conversation.context, conversation.state, conversation.paused = {}, "IDLE", True
-    for event in session.scalars(select(Inbox).where(Inbox.conversation_key == conversation_key)):
-        event.payload, event.status = {}, "expired"
-    for job in session.scalars(select(Outbox).where(Outbox.conversation_key == conversation_key)):
-        job.payload, job.status = {}, "suppressed"
     orders = session.scalars(
         select(Order)
         .where(Order.conversation_key == conversation_key)
         .order_by(Order.id)
         .with_for_update()
     ).all()
+    # Lock the same job rows claimed by the dispatcher. If a claim wins, inspect
+    # its committed processing state; if erasure wins, SKIP LOCKED cannot claim it.
+    # Order locks also serialize status changes that enqueue new exports.
+    jobs = session.scalars(
+        select(Outbox)
+        .where(
+            or_(
+                Outbox.conversation_key == conversation_key,
+                Outbox.order_id.in_([order.id for order in orders]),
+            )
+        )
+        .order_by(Outbox.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).all()
+    if any(job.status == "processing" for job in jobs):
+        raise ValueError("delivery_in_progress")
+    conversation.context, conversation.state, conversation.paused = {}, "IDLE", True
+    for event in session.scalars(select(Inbox).where(Inbox.conversation_key == conversation_key)):
+        event.payload, event.status = {}, "expired"
+    for job in jobs:
+        job.payload = {}
+        if job.status in {"pending", "failed", "uncertain"}:
+            job.status, job.error = "suppressed", "customer_erasure"
     for order in orders:
         order.details = {k: v for k, v in order.details.items() if k in {"delivery", "payment"}}
         order.anonymized = True

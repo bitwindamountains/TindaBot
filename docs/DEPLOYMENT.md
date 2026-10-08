@@ -63,7 +63,7 @@ Run `uv run tindabot doctor` to check the configured environment. It reports mis
 
 - This is a single-shop operator interface, using the existing privileged bearer token. It does not provide individual staff accounts, role-specific UI, or per-person audit attribution.
 - Data refreshes on request. The selected period is 7 or 30 Manila calendar days. Order value includes shipping and unpaid orders, excludes cancelled orders, and must not be read as settled revenue.
-- The UI loads the latest 200 orders in the selected period and the first 500 products. It explicitly labels truncation. Aggregate period totals include all matching orders; active-product totals include the entire catalog. CSV exports only the loaded, filtered order rows.
+- Orders defaults to All dates and supports Needs attention or Reporting period scopes. Server-side filters and 200-record cursor pages reach older orders; connected CSV exports fetch all matching pages. Pending counts span all dates, while financial reporting remains period-based. Product browsing remains limited to the first 500 records; active-product totals include the entire catalog.
 - A failed stock request can have an uncertain network outcome. Retry within the same dialog to reuse the adjustment ID. Before closing and making a new adjustment, refresh and reconcile the actual stock.
 - Existing APIs and the seller Sheet remain available for larger catalogs and older records. There is no browser product-import flow, customer messaging composer, or payment processor.
 

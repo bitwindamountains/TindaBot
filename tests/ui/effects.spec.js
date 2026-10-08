@@ -59,7 +59,9 @@ test('glass quick actions retain contrast, focus containment, and dismissal in b
 });
 
 test('real shader draws locally, survives refresh, pauses, disposes, and falls back on context loss', async () => {
-  test.setTimeout(120000);
+  // SwiftShader compilation/disposal on shared Windows CPUs can exceed two
+  // minutes. Keep individual rendering assertions bounded below.
+  test.setTimeout(240000);
   const browser = await chromium.launch({args: ['--enable-unsafe-swiftshader']});
   try {
     const page = await browser.newPage({viewport: {width: 1440, height: 1000}, reducedMotion: 'no-preference'});

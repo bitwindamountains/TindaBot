@@ -70,6 +70,13 @@ def main():
                 "delivery_uncertain": 0,
             }
             assert snapshot.headers["cache-control"] == "no-store"
+            queue = client.get(
+                "/admin/workspace?scope=open&sort=oldest",
+                headers={"Authorization": "Bearer release-smoke-token-only"},
+            )
+            assert queue.status_code == 200
+            assert queue.json()["order_total"] == 0
+            assert queue.json()["next_cursor"] is None
     report = {
         "installed_wheel": True,
         "migrations": "0002",
@@ -77,6 +84,7 @@ def main():
         "public_shell": True,
         "authenticated_snapshot": True,
         "diagnostic_contract_verified": True,
+        "all_time_queue_contract_verified": True,
         "providers_called": False,
         "scope": "Installed wheel and migrations in isolated local Python environment; not container or hosting validation",
     }

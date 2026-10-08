@@ -1,6 +1,6 @@
 # Release status
 
-Date: 7 October 2026  
+Date: 8 October 2026<br>
 Version: 0.1.0  
 Decision: **locally verified release candidate, prepared for staging deployment; public launch requires external setup and acceptance.** See the [deployment handoff](DEPLOYMENT.md).
 
@@ -12,7 +12,7 @@ The new same-origin seller workspace includes Overview, Orders, Inventory, and A
 
 The [feature review](FEATURE_REVIEW.md) records completed workflow improvements and prioritized remaining feature gaps. Payment follow-up, stock triage and adjustment previews, and actionable automation diagnostics are included in this revision.
 
-The subsequent [checkpoint review](FOLLOW_UP_REVIEW.md) identifies unresolved erasure delivery checks, visibility of older unfinished orders, catalog/command failure coupling, and navigation context. Address the P1 findings before public launch; the validation below predates those fixes.
+The four findings from the [checkpoint review](FOLLOW_UP_REVIEW.md) are fixed: erasure coordinates with order-linked delivery claims, unfinished orders remain discoverable across all dates with paginated search/export, catalog failures no longer block seller commands, and navigation retains working context in tab memory.
 
 The original [production review](PRODUCTION_PLAN.md) remains the design baseline. Its statement that no code exists describes the earlier review, not the current workspace.
 
@@ -28,9 +28,9 @@ Key scope decisions made during implementation:
 ## Validation evidence
 
 - Python 3.12 local test suite includes real PostgreSQL 17 tests for concurrent first deliveries, competing purchases, repeated confirmations, row locking, queue claims, migrations, and repeated seller commands.
-- Latest full run: **64 tests passed, no skips, 77% measured package coverage**, including seven PostgreSQL tests and an HTTP API/worker subprocess restart test. The added PostgreSQL case verifies correct Manila calendar-day grouping for afternoon orders. [JUnit evidence](validation/backend-tests.xml).
-- Follow-up workspace API regression run on 7 October: **4 passed**, including actual order-detail timestamps and separate failed/uncertain diagnostic counts. This supplements the earlier full backend run.
-- Seventeen Chromium browser workflows cover order progression, inventory, automation, CSV export, connection/error/loading states, light/dark accessibility, keyboard operation, 320/390px layouts, retained idempotency IDs on live-API retries using mock responses, chart exploration, order sorting, glass quick actions, and ambient motion controls. The refined workspace adds a status pipeline, persistent mobile navigation, responsive order rows, scoped search, and sequential order review with fulfillment progress. Additional checks exercise real WebGL drawing/pause, refresh preservation, canvas disposal, context loss, and no-download fallbacks. Automated axe checks reported no A/AA violations in the tested views; this is not a blanket accessibility certification. [Browser evidence](validation/ui-tests.json).
+- Latest full run: **78 tests passed, no skips**, including ten PostgreSQL tests and an HTTP API/worker subprocess restart test. Coverage is 78%. The PostgreSQL cases include Manila date grouping, customer-name search and both claim/erasure interleavings. [JUnit evidence](validation/follow-up-backend-tests.xml).
+- The latest full suite includes the earlier timestamp/diagnostic regressions plus older-order visibility, filtered cursor paging, tie ordering, insertion boundaries and preservation of dashboard totals.
+- Nineteen Chromium browser workflows cover order progression, inventory, automation, complete filtered CSV export, connection/error/loading states, light/dark accessibility, keyboard operation, 320/390px layouts, retained idempotency IDs on live-API retries using mock responses, chart exploration, order sorting, glass quick actions, and ambient motion controls. They also verify Back/Forward context and privacy, connected pagination, server search, and restoration of loaded pages. Additional checks exercise real WebGL drawing/pause, refresh preservation, canvas disposal, context loss, and no-download fallbacks. Automated axe checks reported no A/AA violations in the tested views; this is not a blanket accessibility certification. [Browser evidence](validation/ui-tests.json).
 - Ten-minute localhost soak completed at **10 events/second: 6,000 accepted and processed events, 6,000 dry-run replies, zero HTTP errors, and 32 ms p95 acknowledgement latency**. Maximum acknowledgement was 1.75 seconds; maximum sampled inbox age was 10.84 seconds during concurrent local test activity. The queue fully drained. This establishes local durable intake behavior, not hosted or real-provider reply latency. [Raw load report](validation/local-load.json).
 - Python and npm dependency audits report no known vulnerabilities in the checked dependency sets.
 - Wheel and source distribution build successfully. An isolated environment installed the wheel and verified migrations, readiness, static assets, authenticated snapshots, and unauthorized access rejection without source imports or provider calls. [Installed-wheel smoke report](validation/release-smoke.json).
@@ -42,6 +42,8 @@ Key scope decisions made during implementation:
 - The suite currently emits a third-party Starlette TestClient deprecation notice for httpx; tests pass. Migration to its replacement test transport can follow once compatibility is verified.
 
 Code coverage is diagnostic, not evidence that every operational gate has passed. The provider adapters still need actual account acceptance tests.
+
+Browser run detail: 18 workflows passed in the latest full run; the software-WebGL workflow exceeded its two-minute overall allowance after its draw/pause assertions. With a four-minute overall allowance and unchanged individual rendering assertions, the isolated retry passed in 33.4 seconds. Both the [full run](validation/ui-tests.json) and [shader retry](validation/shader-follow-up.json) are retained; this is not a physical-device performance guarantee.
 
 ## Remaining launch gates
 
@@ -67,5 +69,5 @@ The configuration doctor confirms that the external provider credentials and pri
 - Erasure removes personal fields and queues Sheet cleanup but retains restricted PSID/order association metadata. Complete unlinking, external-provider deletion, and post-restore ledger replay need the documented seller/operator process or a future implementation.
 - The default retention and unpaid-expiry values are proposals. Startup acknowledgement is a configuration guard, not legal or commercial approval.
 - The local restore exercise covered schema/catalog recovery, not a full hosted disaster simulation or production order-to-provider reconciliation.
-- The workspace supports one privileged operator credential, manually refreshed data, the latest 200 orders within 7/30 days, and the first 500 products. Truncation is labeled; CSV exports the loaded filtered rows. Staff accounts, role-specific UI, older-order browsing, and browser catalog import are not included. Larger operations can use the existing APIs and seller Sheet.
+- The workspace supports one privileged operator credential and manually refreshed snapshots. Orders supports all dates, actionable queues and 7/30-day reporting scopes with server filters and 200-record cursor pages; connected CSV exports fetch the complete selected result. Paging excludes new insertions after its anchor but does not freeze updates to existing orders. The product view remains capped at 500. Staff accounts, role-specific UI, custom date ranges and browser catalog import are not included.
 - Physical mobile hardware and non-Chromium browser acceptance remain unverified. A synthetic 4x CPU mobile viewport check is recorded separately; it does not establish a sustained frame-rate guarantee.

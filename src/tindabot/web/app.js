@@ -15,7 +15,34 @@ const date = (timestamp, options = {month: 'short', day: 'numeric'}) => {
   return dateFormats.get(key).format(timestamp * 1000);
 };
 const labels = {overview: 'Overview', orders: 'Orders', inventory: 'Inventory', automation: 'Automation'};
-const state = {view: 'overview', days: 7, filter: 'all', query: '', token: '', data: null, loading: false, error: '', request: 0, chartDay: null, sort: 'newest', payment: 'all', stockSort: 'name'};
+const state = {view: 'overview', days: 7, filter: 'all', query: '', token: '', data: null, loading: false, error: '', request: 0, chartDay: null, sort: 'newest', payment: 'all', stockSort: 'name', scope: 'all', paging: false};
+const viewContexts = new Map(), historyContexts = new Map();
+let historyKey = crypto.randomUUID(), searchTimer;
+const contextKeys = ['view', 'filter', 'query', 'payment', 'sort', 'stockSort', 'scope', 'days'];
+function saveContext() {
+  const context = Object.fromEntries(contextKeys.map(key => [key, state[key]]));
+  context.scroll = window.scrollY;
+  if (!isDemo() && !state.loading && state.loadedPath === workspacePath()) {
+    context.data = state.data;
+    context.loadedPath = state.loadedPath;
+  }
+  viewContexts.set(state.view, context);
+  historyContexts.set(historyKey, context);
+}
+function workspacePath(cursor = null) {
+  const params = new URLSearchParams({days: state.days});
+  if (state.view === 'orders') {
+    Object.entries({scope: state.scope, status: state.filter, payment: state.payment, sort: state.sort, q: state.query}).forEach(([key, value]) => params.set(key, value));
+  }
+  if (cursor) params.set('cursor', cursor);
+  return `/admin/workspace?${params}`;
+}
+function updateOrderView(focus = null) {
+  saveContext();
+  if (!isDemo() && state.view === 'orders') return refresh().then(() => focus && $(focus)?.focus({preventScroll: true}));
+  renderPage();
+  if (focus) $(focus)?.focus({preventScroll: true});
+}
 const dialog = $('#dialog');
 let toastTimer, modalOpener, modalVersion = 0;
 const isDemo = () => !state.token;
@@ -41,7 +68,7 @@ function shell() {
       <div class="account"><span class="avatar">${isDemo() ? 'SS' : 'OP'}</span><div class="shop-copy"><strong>${isDemo() ? 'Sari Studio' : 'Shop operator'}</strong><small>${isDemo() ? 'Exploring TindaBot' : 'Authenticated session'}</small></div></div></div>
     </aside>
     <div class="workspace"><header class="topbar"><div class="breadcrumb"><span>Workspace</span>${icon('chevron')}<strong id="breadcrumb">${labels[state.view]}</strong></div>
-      <div class="top-actions"><label class="top-search">${icon('search')}<span class="sr-only">Search orders or products</span><input id="search" type="search" placeholder="Search…" autocomplete="off" value="${escape(state.query)}"><kbd aria-hidden="true">/</kbd></label>
+      <div class="top-actions"><label class="top-search">${icon('search')}<span class="sr-only">Search orders or products</span><input id="search" type="search" maxlength="200" placeholder="Search…" autocomplete="off" value="${escape(state.query)}"><kbd aria-hidden="true">/</kbd></label>
       <button class="icon-button shortcut-button" data-action="commands" aria-label="Quick actions" aria-keyshortcuts="Control+k Meta+k" title="Quick actions · Ctrl K">⌘ K</button>
       <button class="icon-button" data-action="theme" aria-label="Switch to ${document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'} mode">${icon(document.documentElement.dataset.theme === 'dark' ? 'sun' : 'moon')}</button>
       ${button(isDemo() ? 'Connect shop' : 'Disconnect', isDemo() ? 'connect' : 'disconnect', isDemo() ? 'link' : '')}</div></header>
@@ -52,9 +79,9 @@ function shell() {
 }
 function heading() {
   const titles = {overview: 'A good day to grow.', orders: 'Every order, in order.', inventory: 'Good things in stock.', automation: 'Your shop’s quiet helper.'};
-  const subtitles = {overview: 'Your shop at a glance. Your next step, within reach.', orders: 'Track the journey. Keep every promise.', inventory: 'Keep your shelves ready for the next order.', automation: 'A clear view of what?s running behind the scenes.'};
+  const subtitles = {overview: 'Your shop at a glance. Your next step, within reach.', orders: 'Track the journey. Keep every promise.', inventory: 'Keep your shelves ready for the next order.', automation: 'A clear view of what is running behind the scenes.'};
   const overview = state.view === 'overview', pending = state.data.summary.pending;
-  return `<div class="page-heading ${overview ? 'page-heading-overview' : ''}">${overview ? heroBackdrop() : ''}<div class="welcome-copy"><div class="welcome-eyebrow">${overview ? `${escape(state.data.shop_name)} <span class="eyebrow-divider">/</span> ${date(state.data.generated_at, {weekday: 'short', month: 'short', day: 'numeric'})}` : `Your workspace / ${labels[state.view]}`}</div><h1>${overview ? 'A good day to <em>grow.</em>' : titles[state.view]}</h1><p>${subtitles[state.view]}</p></div>${overview ? `<div class="hero-brief"><div class="brief-title"><span class="dot"></span>${pending ? 'Your next move' : 'Room to breathe'}</div><div class="brief-copy"><strong class="numeric">${String(pending).padStart(2, '0')}</strong><span>${pending ? 'orders waiting<br>for your okay' : 'orders waiting.<br>You’re all caught up.'}</span></div><div class="hero-actions"><button class="button button-primary" ${pending ? 'data-action="pending"' : 'data-view="orders"'}>${pending ? `Review ${pending} orders` : 'View orders'} ${icon('arrow')}</button><button class="icon-button" data-action="commands" aria-label="Find an action" title="Find an action">${icon('search')}</button></div></div>` : ''}<div class="actions">${['overview', 'orders'].includes(state.view) ? `<label class="select-wrap">${icon('calendar')}<span class="sr-only">Reporting period</span><select id="period"><option value="7" ${state.days === 7 ? 'selected' : ''}>Last 7 days</option><option value="30" ${state.days === 30 ? 'selected' : ''}>Last 30 days</option></select></label>` : ''}<button class="icon-button" data-action="refresh" aria-label="Refresh workspace" ${state.loading ? 'disabled' : ''}>${icon('refresh')}</button></div></div>`;
+  return `<div class="page-heading ${overview ? 'page-heading-overview' : ''}">${overview ? heroBackdrop() : ''}<div class="welcome-copy"><div class="welcome-eyebrow">${overview ? `${escape(state.data.shop_name)} <span class="eyebrow-divider">/</span> ${date(state.data.generated_at, {weekday: 'short', month: 'short', day: 'numeric'})}` : `Your workspace / ${labels[state.view]}`}</div><h1>${overview ? 'A good day to <em>grow.</em>' : titles[state.view]}</h1><p>${subtitles[state.view]}</p></div>${overview ? `<div class="hero-brief"><div class="brief-title"><span class="dot"></span>${pending ? 'Your next move' : 'Room to breathe'}</div><div class="brief-copy"><strong class="numeric">${String(pending).padStart(2, '0')}</strong><span>${pending ? 'orders waiting<br>for your okay' : 'orders waiting.<br>You’re all caught up.'}</span></div><div class="hero-actions"><button class="button button-primary" ${pending ? 'data-action="pending"' : 'data-view="orders"'}>${pending ? `Review ${pending} orders` : 'View orders'} ${icon('arrow')}</button><button class="icon-button" data-action="commands" aria-label="Find an action" title="Find an action">${icon('search')}</button></div></div>` : ''}<div class="actions">${(state.view === 'overview' || (state.view === 'orders' && state.scope === 'period')) ? `<label class="select-wrap">${icon('calendar')}<span class="sr-only">Reporting period</span><select id="period"><option value="7" ${state.days === 7 ? 'selected' : ''}>Last 7 days</option><option value="30" ${state.days === 30 ? 'selected' : ''}>Last 30 days</option></select></label>` : ''}<button class="icon-button" data-action="refresh" aria-label="Refresh workspace" ${state.loading ? 'disabled' : ''}>${icon('refresh')}</button></div></div>`;
 }
 
 function renderPage(animate = false) {
@@ -80,7 +107,7 @@ function metrics() {
     ${[
       ['Order value', money(s.order_value), 'Excludes cancelled orders', 'chart'],
       ['Total orders', s.orders.toLocaleString(), `In the last ${state.days} days`, 'bag'],
-      ['Awaiting confirmation', s.pending.toLocaleString(), s.pending ? 'A little attention goes a long way' : 'You’re all caught up', 'clock'],
+      ['Awaiting confirmation', s.pending.toLocaleString(), 'Across all dates', 'clock'],
       ['Active products', s.products.toLocaleString(), 'Across your entire catalog', 'box'],
     ].map(([label, value, note, glyph]) => `<div class="metric"><div class="metric-label">${label}${icon(glyph)}</div><strong class="metric-value numeric">${value}</strong><p class="metric-note">${note}</p></div>`).join('')}</section>`;
 }
@@ -136,7 +163,7 @@ function overview() {
 }
 function orderPipeline() {
   const stages = [['pending', 'To confirm', 'clock'], ['confirmed', 'To prepare', 'box'], ['shipped', 'On the way', 'arrow'], ['delivered', 'Delivered', 'check']];
-  return `<section class="pipeline" aria-label="Order pipeline"><div class="pipeline-caption"><span class="eyebrow">The order journey</span><span>Loaded orders · last ${state.days} days</span></div><div class="pipeline-stages">${stages.map(([status, label, glyph], index) => `<button class="pipeline-stage" data-stage="${status}" aria-label="${label}: ${state.data.orders.filter(o => o.status === status).length} orders" aria-pressed="${state.filter === status}"><span class="stage-top"><span class="stage-number">0${index + 1}</span>${icon(glyph)}</span><strong class="numeric">${state.data.orders.filter(o => o.status === status).length}</strong><span>${label}</span>${icon('chevron')}</button>`).join('')}</div></section>`;
+  return `<section class="pipeline" aria-label="Order pipeline"><div class="pipeline-caption"><span class="eyebrow">The order journey</span><span>${state.scope === 'period' ? `Last ${state.days} days` : state.scope === 'open' ? 'Needs attention · all dates' : 'All dates'}</span></div><div class="pipeline-stages">${stages.map(([status, label, glyph], index) => `<button class="pipeline-stage" data-stage="${status}" aria-label="${label}: ${(state.data.order_counts?.[status] ?? state.data.orders.filter(o => o.status === status).length)} orders" aria-pressed="${state.filter === status}"><span class="stage-top"><span class="stage-number">0${index + 1}</span>${icon(glyph)}</span><strong class="numeric">${(state.data.order_counts?.[status] ?? state.data.orders.filter(o => o.status === status).length)}</strong><span>${label}</span>${icon('chevron')}</button>`).join('')}</div></section>`;
 }
 function filteredOrders(sort = state.sort) {
   const q = state.query.trim().toLowerCase();
@@ -149,9 +176,9 @@ function orderTable(compact) {
   const all = filteredOrders(compact ? 'newest' : state.sort), rows = compact ? all.slice(0, 5) : all;
   const filters = ['all', 'pending', 'confirmed', 'shipped', 'delivered', 'cancelled'];
   return `<section aria-labelledby="orders-title"><div class="section-heading"><h2 id="orders-title">${compact ? 'Recent orders' : 'Your orders'}<span class="count numeric">${all.length}</span></h2>${compact ? '<button class="button button-quiet" data-view="orders">View all orders '+icon('arrow')+'</button>' : button('Export CSV', 'export', 'download', !rows.length ? 'disabled' : '')}</div>
-    ${state.query && rows.length ? `<div class="search-context"><span>Results for <strong>“${escape(state.query)}”</strong></span><button class="text-button" data-action="clear-search">Clear search ${icon('close')}</button></div>` : ''}<div class="panel orders-panel"><div class="table-toolbar"><div class="filters" role="group" aria-label="Filter orders by status">${filters.map(f => `<button class="filter" data-filter="${f}" aria-pressed="${state.filter === f}">${f === 'all' ? 'All orders' : f[0].toUpperCase() + f.slice(1)}</button>`).join('')}</div>${compact ? '' : `<div class="order-tools"><label class="order-sort"><span>Payment</span><select id="payment-filter" aria-label="Filter orders by payment">${[['all', 'All payments'], ['unpaid', 'Unpaid'], ['paid', 'Paid'], ['refund_required', 'Refund required']].map(([value, label]) => `<option value="${value}" ${state.payment === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label><label class="order-sort"><span>Sort</span><select id="order-sort" aria-label="Sort orders">${[['newest', 'Newest first'], ['oldest', 'Oldest first'], ['highest', 'Highest amount'], ['lowest', 'Lowest amount']].map(([value, label]) => `<option value="${value}" ${state.sort === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label></div>`}</div>
+    ${state.query && rows.length ? `<div class="search-context"><span>Results for <strong>“${escape(state.query)}”</strong></span><button class="text-button" data-action="clear-search">Clear search ${icon('close')}</button></div>` : ''}<div class="panel orders-panel"><div class="table-toolbar"><div class="filters" role="group" aria-label="Filter orders by status">${filters.map(f => `<button class="filter" data-filter="${f}" aria-pressed="${state.filter === f}">${f === 'all' ? 'All orders' : f[0].toUpperCase() + f.slice(1)}</button>`).join('')}</div>${compact ? '' : `<div class="order-tools"><label class="order-sort"><span>Show</span><select id="order-scope" aria-label="Order date scope">${[['all', 'All dates'], ['open', 'Needs attention'], ['period', 'Reporting period']].map(([value, label]) => `<option value="${value}" ${state.scope === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label><label class="order-sort"><span>Payment</span><select id="payment-filter" aria-label="Filter orders by payment">${[['all', 'All payments'], ['unpaid', 'Unpaid'], ['paid', 'Paid'], ['refund_required', 'Refund required']].map(([value, label]) => `<option value="${value}" ${state.payment === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label><label class="order-sort"><span>Sort</span><select id="order-sort" aria-label="Sort orders">${[['newest', 'Newest first'], ['oldest', 'Oldest first'], ['highest', 'Highest amount'], ['lowest', 'Lowest amount']].map(([value, label]) => `<option value="${value}" ${state.sort === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label></div>`}</div>
     ${rows.length ? `<div class="table-scroll" role="region" aria-label="Orders table" tabindex="0"><table><thead><tr><th scope="col">Order</th><th scope="col" class="customer-column">Customer</th><th scope="col">Status</th><th scope="col" class="date-column">Date</th><th scope="col" class="align-right">Amount</th></tr></thead><tbody>${rows.map(o => `<tr><td><button class="order-link numeric" data-order="${escape(o.id)}" aria-label="Open order ${escape(o.code)}">${escape(o.code)}</button><span class="mobile-customer">${escape(o.name)}</span></td><td class="customer-column"><div class="customer"><span class="avatar" aria-hidden="true">${escape(initials(o.name))}</span><span class="customer-name" title="${escape(o.name)}">${escape(o.name)}</span></div></td><td>${badge(o.status)}</td><td class="muted numeric date-column">${escape(date(o.created_at))}</td><td class="align-right numeric">${money(o.total_minor)}<span class="payment-label payment-${escape(o.payment_status)}">${escape(o.payment_status.replaceAll('_', ' '))}</span></td></tr>`).join('')}</tbody></table></div>` : empty(state.query || state.filter !== 'all' || state.payment !== 'all' ? 'No orders match just yet' : 'Your next chapter starts here', state.query || state.filter !== 'all' || state.payment !== 'all' ? 'Try another search or clear your filters.' : 'Orders placed through Messenger will appear here.', state.query || state.filter !== 'all' || state.payment !== 'all' ? 'clear' : 'guide', state.query || state.filter !== 'all' || state.payment !== 'all' ? 'Clear filters' : 'View workspace guide')}
-    <div class="table-footer"><span>${state.data.orders_truncated ? 'Latest 200 orders loaded · totals include all orders in period' : `Showing ${rows.length} of ${all.length} matching orders`}</span><span>${isDemo() ? 'Sample Messenger orders' : 'Messenger orders'}</span></div></div></section>`;
+    <div class="table-footer"><span>${compact ? `Showing ${rows.length} recent orders` : `Showing ${rows.length} of ${state.data.order_total ?? all.length} matching orders`}</span><span>${isDemo() ? 'Sample Messenger orders' : 'Messenger orders'}</span>${!compact && state.data.next_cursor ? button(state.paging ? 'Loading more...' : 'Load more orders', 'more-orders', 'arrow', state.paging ? 'disabled' : '') : ''}</div></div></section>`;
 }
 function inventory() {
   const q = state.query.trim().toLowerCase();
@@ -202,20 +229,55 @@ async function api(path, options = {}, token = state.token) {
 }
 async function refresh(notify = false) {
   const request = ++state.request;
+  const path = workspacePath();
   const focused = document.activeElement;
   const restoreFocus = focused?.id === 'period' ? '#period' : focused?.dataset.action === 'refresh' ? '[data-action="refresh"]' : null;
-  state.loading = true; state.error = ''; renderPage();
+  state.loading = true; state.paging = false; state.error = ''; renderPage();
   try {
-    const data = isDemo() ? demoSnapshot(state.days) : await api(`/admin/workspace?days=${state.days}`);
+    const data = isDemo() ? demoSnapshot(state.days, state.view === 'orders' ? state.scope : 'period') : await api(path);
     if (request !== state.request) return;
     state.data = data;
+    state.loadedPath = path;
     if (notify) toast(isDemo() ? 'Preview refreshed.' : 'Workspace is up to date.');
   } catch (error) { if (request === state.request) state.error = error.message; }
   finally { if (request === state.request) { state.loading = false; renderPage(); const count = $('.nav-count'); if (count) count.textContent = state.data.summary.pending; if (restoreFocus && document.activeElement === document.body) $(restoreFocus)?.focus({preventScroll: true}); } }
 }
-function navigate(view, filter = 'all') {
-  state.view = view; state.filter = filter; state.payment = 'all'; state.query = ''; $('#search').value = '';
-  history.replaceState(null, '', `#${view}`); renderPage(true); $('#main').focus({preventScroll: true}); window.scrollTo({top: 0, behavior: 'instant'});
+async function navigate(view, filter, restored = null) {
+  clearTimeout(searchTimer);
+  saveContext();
+  const context = restored || viewContexts.get(view) || {filter: 'all', payment: 'all', query: '', scope: 'all', scroll: 0};
+  Object.assign(state, context, {view, paging: false});
+  if (filter !== undefined) Object.assign(state, {filter, payment: 'all', query: '', scope: 'all'});
+  $('#search').value = state.query;
+  if (restored) historyKey = history.state?.workspaceKey || crypto.randomUUID();
+  if (!restored) {
+    historyKey = crypto.randomUUID();
+    history.pushState({workspaceKey: historyKey}, '', `#${view}`);
+  }
+  if (isDemo()) { state.data = demoSnapshot(state.days, view === 'orders' ? state.scope : 'period'); renderPage(true); }
+  else if (context.data && filter === undefined && context.loadedPath === workspacePath()) { state.request++; state.loading = false; state.error = ''; renderPage(true); }
+  else await refresh();
+  $('#main').focus({preventScroll: true});
+  window.scrollTo({top: restored ? context.scroll || 0 : 0, behavior: 'instant'});
+  saveContext();
+}
+async function loadMoreOrders() {
+  if (!state.data.next_cursor || state.paging || state.loading) return;
+  const request = state.request;
+  state.paging = true; renderPage();
+  try {
+    const data = await api(workspacePath(state.data.next_cursor));
+    if (request !== state.request) return;
+    const ids = new Set(state.data.orders.map(order => order.id));
+    state.data.orders.push(...data.orders.filter(order => !ids.has(order.id)));
+    state.data.next_cursor = data.next_cursor;
+    state.data.orders_truncated = data.orders_truncated;
+  } catch (error) { toast(error.message); }
+  finally { if (request === state.request) { state.paging = false; renderPage(); ($('[data-action="more-orders"]') || $('#main')).focus({preventScroll: true}); saveContext(); } }
+}
+function invalidateSnapshots() {
+  for (const context of [...viewContexts.values(), ...historyContexts.values()]) delete context.data;
+  state.loadedPath = null;
 }
 function openModal(title, content, drawer = false) {
   modalVersion++;
@@ -268,9 +330,23 @@ function previewStock() {
 function guide() {
   openModal('A calmer way to run your shop', `<p>Your essentials, in one place.</p><div class="detail-section"><h3>1. Explore or connect</h3><p class="muted">The preview uses sample data. Connect with your operator token to view this server’s shop. Reloading clears the connection.</p></div><div class="detail-section"><h3>2. Keep orders moving</h3><p class="muted">Open an order to confirm it, verify payment, or update delivery. Inventory updates use adjustments so incoming orders remain accounted for.</p></div><div class="detail-section"><h3>3. Check your assistant</h3><p class="muted">Automation shows the last worker heartbeat and delivery mode. Import products with your configured seller sheet or catalog API. Failed jobs need operator review using the operations runbook.</p></div><div class="detail-section"><h3>A few useful shortcuts</h3><p class="muted">Press / to search, Escape to close a dialog, and Tab to move between controls. Use the theme button for a quieter evening view.</p></div><div class="dialog-actions">${button('Got it', 'close', 'check')}</div>`);
 }
-function exportOrders() {
+async function exportOrders() {
+  let selected = filteredOrders();
+  if (!isDemo() && state.view === 'orders') {
+    const path = workspacePath(), token = state.token;
+    selected = [];
+    let cursor = null;
+    toast('Preparing all matching orders...');
+    try {
+      do {
+        const data = await api(path + (cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''), {}, token);
+        if (state.token !== token) return;
+        selected.push(...data.orders); cursor = data.next_cursor;
+      } while (cursor);
+    } catch (error) { toast(error.message); return; }
+  }
   const safeCell = (v) => { const s = String(v); return `"${(/^[=+\-@\t\r\n]/.test(s) ? "'" + s : s).replaceAll('"', '""')}"`; };
-  const rows = [['Order', 'Customer', 'Status', 'Payment status', 'Date (Manila)', 'Amount (PHP)'], ...filteredOrders().map(o => [o.code, o.name, o.status, o.payment_status, date(o.created_at, {year: 'numeric', month: '2-digit', day: '2-digit'}), (o.total_minor / 100).toFixed(2)])];
+  const rows = [['Order', 'Customer', 'Status', 'Payment status', 'Date (Manila)', 'Amount (PHP)'], ...selected.map(o => [o.code, o.name, o.status, o.payment_status, date(o.created_at, {year: 'numeric', month: '2-digit', day: '2-digit'}), (o.total_minor / 100).toFixed(2)])];
   const url = URL.createObjectURL(new Blob(['\uFEFF' + rows.map(row => row.map(safeCell).join(',')).join('\r\n')], {type: 'text/csv;charset=utf-8'}));
   const link = document.createElement('a'); link.href = url; link.download = `tindabot-${isDemo() ? 'sample-' : ''}orders.csv`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   toast(`${rows.length - 1} ${isDemo() ? 'sample ' : ''}orders exported.`);
@@ -279,7 +355,6 @@ document.addEventListener('click', async event => {
   const node = event.target.closest('button'); if (!node || node.disabled) return;
   if (node.dataset.command) {
     const key = node.dataset.command;
-    state.query = ''; $('#search').value = '';
     closeModal();
     // The native close event restores focus before the new view takes focus.
     requestAnimationFrame(() => navigate(key === 'pending' ? 'orders' : key === 'low' ? 'inventory' : key, key === 'pending' ? 'pending' : key === 'low' ? 'low' : 'all'));
@@ -287,11 +362,11 @@ document.addEventListener('click', async event => {
   }
   if (node.dataset.stockDelta) { $('#delta').value = node.dataset.stockDelta; previewStock(); $('#delta').focus(); return; }
   if (node.dataset.view) return navigate(node.dataset.view);
-  if (node.dataset.stage) { state.filter = node.dataset.stage; renderPage(); $(`[data-stage="${state.filter}"]`)?.focus({preventScroll: true}); return; }
-  if (node.dataset.filter) { state.filter = node.dataset.filter; renderPage(); $(`[data-filter="${state.filter}"]`)?.focus({preventScroll: true}); return; }
+  if (node.dataset.stage) { state.filter = node.dataset.stage; return updateOrderView(`[data-stage="${state.filter}"]`); }
+  if (node.dataset.filter) { state.filter = node.dataset.filter; return updateOrderView(`[data-filter="${state.filter}"]`); }
   if (node.dataset.order) return showOrder(node.dataset.order);
   const action = node.dataset.action;
-  if (action === 'clear-search') { state.query = ''; $('#search').value = ''; renderPage(); $('#search').focus(); return; }
+  if (action === 'clear-search') { state.query = ''; $('#search').value = ''; return updateOrderView('#search'); }
   if (action === 'commands') return commands();
   if (action === 'motion') return toggleAmbient();
   if (action === 'close') return closeModal();
@@ -299,10 +374,11 @@ document.addEventListener('click', async event => {
   if (action === 'guide') return guide();
   if (action === 'stock') return stockModal(node.dataset.sku);
   if (action === 'refresh') return refresh(true);
+  if (action === 'more-orders') return loadMoreOrders();
   if (action === 'pending') return navigate('orders', 'pending');
   if (action === 'low-stock') return navigate('inventory', 'low');
-  if (action === 'clear') { state.filter = 'all'; state.payment = 'all'; state.query = ''; $('#search').value = ''; renderPage(); $('#search').focus(); return; }
-  if (action === 'disconnect') { state.request++; state.token = ''; state.loading = false; state.error = ''; state.query = ''; state.data = demoSnapshot(state.days); shell(); toast('Disconnected. You’re back in the preview.'); return; }
+  if (action === 'clear') { state.filter = 'all'; state.payment = 'all'; state.query = ''; $('#search').value = ''; return updateOrderView('#search'); }
+  if (action === 'disconnect') { state.request++; state.token = ''; state.loading = false; state.error = ''; state.query = ''; viewContexts.clear(); historyContexts.clear(); state.data = demoSnapshot(state.days, state.view === 'orders' ? state.scope : 'period'); shell(); toast('Disconnected. You’re back in the preview.'); return; }
   if (action === 'theme') {
     const theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'; document.documentElement.dataset.theme = theme;
     try { localStorage.setItem('tindabot-theme', theme); } catch { /* Theme still works without storage. */ }
@@ -323,7 +399,7 @@ document.addEventListener('click', async event => {
     try {
       if (isDemo()) demoStatus(id, status);
       else await api('/admin/order-status', {method: 'POST', body: JSON.stringify({command_id: dialog.dataset.commandId, order_id: id, expected_version: Number(dialog.dataset.version), status})});
-      busy(false); dialog.close(); await refresh(); toast(isDemo() ? 'Sample order updated.' : 'Order update saved.');
+      busy(false); dialog.close(); invalidateSnapshots(); await refresh(); toast(isDemo() ? 'Sample order updated.' : 'Order update saved.');
     } catch (error) { $('#form-error', dialog).textContent = error.message; }
     finally { busy(false); node.textContent = label; } return;
   }
@@ -344,8 +420,9 @@ document.addEventListener('submit', async event => {
   try {
     if (form.id === 'connect-form') {
       submit.textContent = 'Connecting…';
-      const data = await api(`/admin/workspace?days=${state.days}`, {}, token);
-      state.request++; state.token = token; state.data = data; state.error = ''; state.loading = false; state.query = ''; state.filter = 'all'; state.payment = 'all';
+      state.filter = 'all'; state.payment = 'all'; state.query = '';
+      const data = await api(workspacePath(), {}, token);
+      invalidateSnapshots(); viewContexts.clear(); historyContexts.clear(); state.request++; state.token = token; state.data = data; state.error = ''; state.loading = false; state.query = ''; state.filter = 'all'; state.payment = 'all'; state.loadedPath = workspacePath();
       busy(false); dialog.close(); shell(); toast('Your shop is connected.');
     } else if (form.id === 'stock-form') {
       if (isDemo()) demoStock(form.dataset.sku, delta);
@@ -353,11 +430,11 @@ document.addEventListener('submit', async event => {
         if (form.dataset.delta !== String(delta)) { form.dataset.commandId = crypto.randomUUID(); form.dataset.delta = delta; }
         await api('/admin/stock', {method: 'POST', body: JSON.stringify({command_id: form.dataset.commandId, sku: form.dataset.sku, delta})});
       }
-      busy(false); dialog.close(); await refresh(); toast(isDemo() ? 'Sample stock adjusted.' : 'Stock adjustment saved.');
+      busy(false); dialog.close(); invalidateSnapshots(); await refresh(); toast(isDemo() ? 'Sample stock adjusted.' : 'Stock adjustment saved.');
     } else {
       const enabled = form.dataset.enabled === 'true';
       if (isDemo()) demoAutomation(enabled); else await api('/admin/automation', {method: 'POST', body: JSON.stringify({enabled})});
-      busy(false); dialog.close(); await refresh(); toast(enabled ? 'Automated replies enabled.' : 'Automated replies paused.');
+      busy(false); dialog.close(); invalidateSnapshots(); await refresh(); toast(enabled ? 'Automated replies enabled.' : 'Automated replies paused.');
     }
   } catch (error) { const target = $('#form-error', form); if (target) target.textContent = error.message; }
   finally { busy(false); submit.textContent = label; }
@@ -373,10 +450,25 @@ document.addEventListener('input', event => {
   }
   if (event.target.id !== 'search') return;
   state.query = event.target.value;
-  if (state.view === 'automation') { state.view = 'orders'; state.filter = 'all'; history.replaceState(null, '', '#orders'); }
+  if (state.view === 'automation') { const query = state.query; navigate('orders', 'all'); state.query = query; $('#search').value = query; }
+  saveContext();
+  clearTimeout(searchTimer);
+  if (!isDemo() && state.view === 'orders') {
+    state.request++; state.loading = false; state.paging = false;
+    searchTimer = setTimeout(() => updateOrderView(), 250);
+  }
   renderPage();
 });
-document.addEventListener('change', event => { if (event.target.id === 'payment-filter') { state.payment = event.target.value; renderPage(); $('#payment-filter').focus({preventScroll: true}); } if (event.target.id === 'stock-sort') { state.stockSort = event.target.value; renderPage(); $('#stock-sort').focus({preventScroll: true}); } if (event.target.id === 'order-sort') { state.sort = event.target.value; renderPage(); $('#order-sort').focus({preventScroll: true}); } if (event.target.id === 'period') { state.days = Number(event.target.value); state.chartDay = null; refresh(); } });
+document.addEventListener('change', event => {
+  const fields = {'payment-filter': 'payment', 'stock-sort': 'stockSort', 'order-sort': 'sort', 'order-scope': 'scope'};
+  if (fields[event.target.id]) {
+    state[fields[event.target.id]] = event.target.value;
+    if (event.target.id === 'order-scope' && isDemo()) state.data = demoSnapshot(state.days, state.scope);
+    return updateOrderView(`#${event.target.id}`);
+  }
+  if (event.target.id === 'period') { state.days = Number(event.target.value); state.chartDay = null; saveContext(); refresh(); }
+});
+
 document.addEventListener('pointermove', event => {
   const chart = event.target.closest('.chart svg');
   if (!chart || state.loading) return;
@@ -399,8 +491,15 @@ document.addEventListener('keydown', event => {
   }
   if (event.key === '/' && !dialog.open && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) { event.preventDefault(); $('#search').focus(); }
 });
-window.addEventListener('hashchange', () => { const view = location.hash.slice(1); if (labels[view]) navigate(view); });
+window.addEventListener('popstate', event => {
+  const view = labels[location.hash.slice(1)] ? location.hash.slice(1) : 'overview';
+  const context = historyContexts.get(event.state?.workspaceKey) || {view, filter: 'all', query: '', payment: 'all', scope: 'all', scroll: 0};
+  navigate(view, undefined, {...context});
+});
+window.addEventListener('hashchange', () => { const view = location.hash.slice(1); if (labels[view] && view !== state.view) navigate(view); });
 matchMedia('(max-width: 760px)').addEventListener('change', () => renderPage());
 state.view = labels[location.hash.slice(1)] ? location.hash.slice(1) : 'overview';
-state.data = demoSnapshot(state.days);
+state.data = demoSnapshot(state.days, state.view === 'orders' ? state.scope : 'period');
+history.replaceState({workspaceKey: historyKey}, '', `#${state.view}`);
 shell();
+saveContext();

@@ -2,6 +2,8 @@
 
 Reviewed 7 October 2026. Scope: the seller workspace and the API contracts it uses. The current deployment target remains a single privileged operator and one seller.
 
+Updated 8 October: the four checkpoint findings are fixed; see [resolution and regression evidence](FOLLOW_UP_REVIEW.md). All-time order search, cursor pagination, complete connected CSV exports and tab-memory navigation context are now included.
+
 ## Changes completed
 
 | Finding | Improvement | Verification |
@@ -18,7 +20,7 @@ Payment verification records an operator's confirmation; it does not charge a cu
 
 | Priority | Gap | Concrete next increment / acceptance criteria |
 | --- | --- | --- |
-| P1 | Order browsing is limited to the latest 200 records in a 7/30-day window. | Add authenticated server search and cursor pagination, an explicit date range, stable ordering, and export of the selected result set. Verify timezone boundaries, insertion during pagination, and access protection. |
+| P2 | Date selection offers All dates, Needs attention and 7/30-day reporting scopes; product browsing is still limited to 500 records. | Add custom date ranges and product pagination/search. Order pagination, server search and complete selected-result export are implemented. |
 | P1 | A refund can be flagged, but its external completion cannot be recorded in the workspace. | Add a version-checked, idempotent refund-reconciliation action with an audit record and reference. Distinguish recording an external refund from sending money. |
 | P1 | Diagnostics describe problems; reconciliation still needs the operator runbook. | Add a protected job inspection screen with bounded, redacted error details. Retrying an uncertain result needs an explicit duplicate-delivery acknowledgement and an audit record. |
 | P1 | Real Meta, Sheets, SMTP, and hosted deployment acceptance are outstanding. | Run the documented staging and supervised-seller checks with the actual accounts. A heartbeat alone must never be presented as end-to-end delivery success. |

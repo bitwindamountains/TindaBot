@@ -380,6 +380,7 @@ tbody tr:hover td:first-child { box-shadow: inset 3px 0 var(--accent); }
 /* Operational controls: payment follow-up, stock triage, and diagnostic guidance. */
 .order-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; margin-left: auto; }
 .order-tools .order-sort { margin: 0; }
+.order-link { min-width: 44px; }
 .payment-label { display: block; color: var(--text-muted); font-size: .625rem; text-transform: capitalize; margin-top: .25rem; }
 .payment-paid { color: var(--success); }
 .payment-refund_required { color: var(--danger); }

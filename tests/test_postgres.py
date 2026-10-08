@@ -157,3 +157,87 @@ def test_concurrent_reuse_of_status_command_does_not_apply_twice(pgdb, settings)
     assert results[0] == results[1]
     with pgdb.sessions() as session:
         assert session.get(Product, "UBE-01").stock == 25
+
+
+def test_erasure_locks_order_jobs_against_concurrent_claims(pgdb, settings):
+    from test_orders import confirm_order
+
+    from tindabot.privacy import erase_customer
+
+    order = confirm_order(pgdb, settings)
+    with pgdb.sessions.begin() as erasing:
+        erase_customer(erasing, "100:200")
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            assert pool.submit(claim_job, pgdb, time.time()).result(timeout=5) is None
+    claimed = claim_job(pgdb, time.time())
+    assert claimed.business_key.startswith("erasure:")
+    with pgdb.sessions() as session:
+        assert "name" not in session.get(Order, order.id).details
+        assert not session.scalar(
+            select(Outbox).where(
+                Outbox.status == "processing", ~Outbox.business_key.like("erasure:%")
+            )
+        )
+
+
+def test_postgres_all_time_search_uses_customer_json_and_literal_wildcards(pgdb, settings):
+    from test_orders import confirm_order
+
+    order = confirm_order(pgdb, settings)
+    with pgdb.sessions.begin() as session:
+        stored = session.get(Order, order.id)
+        stored.created_at = time.time() - 45 * 86400
+        stored.details = {**stored.details, "name": "Queue_100% Customer"}
+    with TestClient(create_app(settings, pgdb)) as client:
+        headers = {"Authorization": "Bearer " + "a" * 40}
+        data = client.get(
+            "/admin/workspace", params={"scope": "open", "q": "queue_100%"}, headers=headers
+        ).json()
+        assert data["orders"][0]["id"] == order.id and data["summary"]["pending"] == 1
+        data = client.get(
+            "/admin/workspace", params={"scope": "all", "q": "queue_100_"}, headers=headers
+        ).json()
+        assert data["order_total"] == 0
+
+
+def test_erasure_waits_for_claim_then_refuses_processing_job(pgdb, settings):
+    from threading import Event
+
+    from sqlalchemy import event
+    from test_orders import confirm_order
+
+    from tindabot.privacy import erase_customer
+
+    order = confirm_order(pgdb, settings)
+    checking_jobs = Event()
+
+    def observe(_connection, _cursor, statement, _parameters, _context, _many):
+        if (
+            "FROM outbound_jobs" in statement
+            and "ORDER BY outbound_jobs.id FOR UPDATE" in statement
+        ):
+            checking_jobs.set()
+
+    def erase():
+        with pgdb.sessions.begin() as session:
+            erase_customer(session, "100:200")
+
+    event.listen(pgdb.engine, "before_cursor_execute", observe)
+    try:
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            with pgdb.sessions.begin() as claiming:
+                job = claiming.scalar(
+                    select(Outbox)
+                    .where(Outbox.order_id == order.id, Outbox.destination == "sheets")
+                    .with_for_update()
+                )
+                job.status = "processing"
+                claiming.flush()
+                result = pool.submit(erase)
+                assert checking_jobs.wait(timeout=5)
+            with pytest.raises(ValueError, match="delivery_in_progress"):
+                result.result(timeout=5)
+    finally:
+        event.remove(pgdb.engine, "before_cursor_execute", observe)
+    with pgdb.sessions() as session:
+        assert "name" in session.get(Order, order.id).details

@@ -99,6 +99,83 @@ def test_erase_refuses_to_race_with_inflight_send(db, settings):
         erase_customer(session, "100:200")
 
 
+@pytest.mark.parametrize("destination", ["sheets", "email"])
+def test_erase_refuses_inflight_order_linked_delivery(db, settings, destination):
+    order = confirm_order(db, settings)
+    with db.sessions.begin() as session:
+        job = session.scalar(
+            select(Outbox).where(Outbox.order_id == order.id, Outbox.destination == destination)
+        )
+        assert job.conversation_key is None
+        job.status = "processing"
+    with db.sessions.begin() as session, pytest.raises(ValueError, match="delivery_in_progress"):
+        erase_customer(session, "100:200")
+    with db.sessions() as session:
+        assert "name" in session.get(Order, order.id).details
+
+
+def test_erase_suppresses_order_jobs_but_preserves_delivery_history(db, settings):
+    order = confirm_order(db, settings)
+    with db.sessions.begin() as session:
+        job = session.scalar(select(Outbox).where(Outbox.destination == "email"))
+        job.status = "delivered"
+        email_id = job.id
+    with db.sessions.begin() as session:
+        erase_customer(session, "100:200")
+    with db.sessions() as session:
+        assert session.get(Outbox, email_id).status == "delivered"
+        original = session.scalar(
+            select(Outbox).where(Outbox.business_key == f"sheet:{order.id}:1")
+        )
+        assert original.status == "suppressed"
+        cleanup = session.scalar(select(Outbox).where(Outbox.business_key.like("erasure:%")))
+        assert cleanup.status == "pending"
+
+
+def test_invalid_catalog_does_not_block_commands_and_health_recovers(db, settings):
+    from tindabot.catalog import CatalogImport
+    from tindabot.cli import DEMO
+
+    order = confirm_order(db, settings)
+    settings.delivery_mode = "live"
+    adapter = Mock()
+    adapter.read_catalog.side_effect = ValueError("Invalid price")
+    adapter.commands.return_value = [(2, ["independent-command", order.id, "1", "confirmed", ""])]
+    now = time.time()
+    sync_seller(db, settings, adapter, now)
+    with db.sessions() as session:
+        assert session.get(Order, order.id).status == "confirmed"
+        health = session.get(Record, "seller-sync").value
+        assert not health["ok"] and not health["catalog"]["ok"]
+        assert health["commands"]["ok"]
+        assert session.get(Record, "catalog").value["version"] == 1
+    adapter.command_result.assert_called_once_with(
+        2, adapter.commands.return_value[0][1], "accepted"
+    )
+    adapter.read_catalog.side_effect = None
+    adapter.read_catalog.return_value = CatalogImport(**DEMO)
+    sync_seller(db, settings, adapter, now + 61)
+    with db.sessions() as session:
+        assert session.get(Order, order.id).version == 2
+        health = session.get(Record, "seller-sync").value
+        assert health["ok"] and "error" not in health["catalog"]
+
+
+def test_command_provider_failure_keeps_successful_catalog_refresh(db, settings):
+    from tindabot.catalog import CatalogImport
+    from tindabot.cli import DEMO
+
+    settings.delivery_mode = "live"
+    adapter = Mock()
+    adapter.read_catalog.return_value = CatalogImport(**DEMO)
+    adapter.commands.side_effect = RuntimeError("Commands unavailable")
+    sync_seller(db, settings, adapter)
+    with db.sessions() as session:
+        health = session.get(Record, "seller-sync").value
+        assert health["catalog"]["ok"] and not health["commands"]["ok"]
+        assert session.get(Record, "catalog").value["version"] == 2
+
+
 def test_superseded_prompt_is_suppressed(db, settings):
     send(db, settings, "hi")
     send(db, settings, "SHOP")

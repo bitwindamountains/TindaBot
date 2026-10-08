@@ -244,10 +244,16 @@ def sync_seller(db, settings, integrations, now=None):
         if not marker or now - marker.updated_at < 60:
             return
         marker.updated_at = now
+    health = {}
     try:
         document = integrations.read_catalog()
         with db.sessions.begin() as session:
             import_catalog(session, document, now)
+        health["catalog"] = {"ok": True, "last_success": now}
+    except Exception as exc:
+        log.error("seller_catalog_failed", extra={"error_code": type(exc).__name__})
+        health["catalog"] = {"ok": False, "error": type(exc).__name__}
+    try:
         for row_number, row in integrations.commands():
             command_id, order_id, version, action, _ = row
             try:
@@ -282,14 +288,25 @@ def sync_seller(db, settings, integrations, now=None):
                     str(exc) if isinstance(exc, OrderConflict) else "invalid_version"
                 )
             integrations.command_result(row_number, row, result)
-        with db.sessions.begin() as session:
-            marker = session.get(Record, "seller-sync")
-            marker.value = {"ok": True, "last_success": now}
+        health["commands"] = {"ok": True, "last_success": now}
     except Exception as exc:
-        log.error("seller_sync_failed", extra={"error_code": type(exc).__name__})
-        with db.sessions.begin() as session:
-            marker = session.get(Record, "seller-sync")
-            marker.value = {**marker.value, "ok": False, "error": type(exc).__name__}
+        log.error("seller_commands_failed", extra={"error_code": type(exc).__name__})
+        health["commands"] = {"ok": False, "error": type(exc).__name__}
+    with db.sessions.begin() as session:
+        marker = session.get(Record, "seller-sync")
+        value = dict(marker.value)
+        for key, outcome in health.items():
+            previous = value.get(key, {})
+            value[key] = {**previous, **outcome}
+            if outcome["ok"]:
+                value[key].pop("error", None)
+        value["ok"] = all(outcome["ok"] for outcome in health.values())
+        if value["ok"]:
+            value["last_success"] = now
+            value.pop("error", None)
+        else:
+            value["error"] = next(v["error"] for v in health.values() if not v["ok"])
+        marker.value = value
 
 
 def run():
