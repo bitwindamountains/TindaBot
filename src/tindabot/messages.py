@@ -34,6 +34,9 @@ COPY = {
     "payment": "Choose your payment method.",
     "delivery": "Delivery or pickup?",
     "expired": "Your previous checkout expired. Let's start again.",
+    "thanks": "You're welcome! Message us anytime.",
+    "faq_topics": "What would you like to know?",
+    "no_faq": "The seller hasn't added answers yet. Tap Talk to seller to ask.",
 }
 
 
