@@ -53,6 +53,11 @@ const badge = (status) => `<span class="badge badge-${escape(status)}"><span cla
 const button = (text, action, glyph = '', extra = '') => `<button class="button" data-action="${action}" ${extra}>${glyph ? icon(glyph) : ''}${text}</button>`;
 const initials = (name) => name.split(/\s+/).filter(Boolean).slice(0, 2).map(n => [...n][0]).join('');
 
+function statusToast(code, status) {
+  const name = isDemo() ? `Sample order ${code}` : code;
+  if (status === 'confirmed' && !state.data.summary.pending) return `${name} confirmed. You’re all caught up.`;
+  return {confirmed: `${name} confirmed.`, shipped: `${name} is on its way.`, delivered: `${name} delivered. One more promise kept.`, paid: `Payment recorded for ${name}.`, cancelled: `${name} cancelled. Its stock is back on the shelf.`}[status] || `${name} updated.`;
+}
 function toast(message) {
   clearTimeout(toastTimer);
   const node = $('#toast'); node.textContent = message; node.classList.add('visible');
@@ -65,7 +70,7 @@ function shell() {
       <div class="brand"><span class="brand-mark">${icon('logo')}</span>TindaBot</div>
       <div class="shop-card"><span class="shop-avatar">${escape(initials(d.shop_name))}</span><div class="shop-copy"><strong title="${escape(d.shop_name)}">${escape(d.shop_name)}</strong><small>${isDemo() ? 'Demo workspace' : 'Connected workspace'}</small></div>${icon('down')}</div>
       <div class="nav-caption">Workspace</div>
-      <nav class="nav" aria-label="Main">${Object.entries(labels).map(([key, label]) => `<button class="nav-button" aria-label="${label}" data-view="${key}" ${key === state.view ? 'aria-current="page"' : ''}>${icon(({overview: 'overview', orders: 'bag', inventory: 'box', automation: 'bot'})[key])}<span>${label}</span>${key === 'orders' ? `<span class="nav-count numeric">${d.summary.pending}</span>` : ''}</button>`).join('')}</nav>
+      <nav class="nav" aria-label="Main">${Object.entries(labels).map(([key, label]) => `<button class="nav-button" aria-label="${label}" data-view="${key}" ${key === state.view ? 'aria-current="page"' : ''}>${icon(({overview: 'overview', orders: 'bag', inventory: 'box', automation: 'bot'})[key])}<span>${label}</span>${key === 'orders' ? `<span class="nav-count numeric" data-count="nav-pending">${d.summary.pending}</span>` : ''}</button>`).join('')}</nav>
       <div class="sidebar-bottom"><div class="side-note">${icon('leaf')} <strong>A little less busy.</strong><p>Your shop, with room to grow.</p></div>
       <button class="nav-button" data-action="guide">${icon('shield')}Workspace guide</button>
       <div class="account"><span class="avatar">${isDemo() ? 'SS' : 'OP'}</span><div class="shop-copy"><strong>${isDemo() ? 'Sari Studio' : 'Shop operator'}</strong><small>${isDemo() ? 'Exploring TindaBot' : 'Authenticated session'}</small></div></div></div>
@@ -84,7 +89,7 @@ function heading() {
   const titles = {overview: 'A good day to grow.', orders: 'Every order, in order.', inventory: 'Good things in stock.', automation: 'Your shop’s quiet helper.'};
   const subtitles = {overview: 'Your shop at a glance. Your next step, within reach.', orders: 'Track the journey. Keep every promise.', inventory: 'Keep your shelves ready for the next order.', automation: 'A clear view of what is running behind the scenes.'};
   const overview = state.view === 'overview', pending = state.data.summary.pending;
-  return `<div class="page-heading ${overview ? 'page-heading-overview' : ''}">${overview ? heroBackdrop() : ''}<div class="welcome-copy"><div class="welcome-eyebrow">${overview ? `${escape(state.data.shop_name)} <span class="eyebrow-divider">/</span> ${date(state.data.generated_at, {weekday: 'short', month: 'short', day: 'numeric'})}` : `Your workspace / ${labels[state.view]}`}</div><h1>${overview ? 'A good day to <em>grow.</em>' : titles[state.view]}</h1><p>${subtitles[state.view]}</p></div>${overview ? `<div class="hero-brief"><div class="brief-title"><span class="dot"></span>${pending ? 'Your next move' : 'Room to breathe'}</div><div class="brief-copy"><strong class="numeric">${String(pending).padStart(2, '0')}</strong><span>${pending ? 'orders waiting<br>for your okay' : 'orders waiting.<br>You’re all caught up.'}</span></div><div class="hero-actions"><button class="button button-primary" ${pending ? 'data-action="pending"' : 'data-view="orders"'}>${pending ? `Review ${pending} orders` : 'View orders'} ${icon('arrow')}</button><button class="icon-button" data-action="commands" aria-label="Find an action" title="Find an action">${icon('search')}</button></div></div>` : ''}<div class="actions">${(state.view === 'overview' || (state.view === 'orders' && state.scope === 'period')) ? `<label class="select-wrap">${icon('calendar')}<span class="sr-only">Reporting period</span><select id="period"><option value="7" ${state.days === 7 ? 'selected' : ''}>Last 7 days</option><option value="30" ${state.days === 30 ? 'selected' : ''}>Last 30 days</option></select></label>` : ''}<button class="icon-button" data-action="refresh" aria-label="Refresh workspace" ${state.loading ? 'disabled' : ''}>${icon('refresh')}</button></div></div>`;
+  return `<div class="page-heading ${overview ? 'page-heading-overview' : ''}">${overview ? heroBackdrop() : ''}<div class="welcome-copy"><div class="welcome-eyebrow">${overview ? `${escape(state.data.shop_name)} <span class="eyebrow-divider">/</span> ${date(state.data.generated_at, {weekday: 'short', month: 'short', day: 'numeric'})}` : `Your workspace / ${labels[state.view]}`}</div><h1>${overview ? 'A good day to <em>grow.</em>' : titles[state.view]}</h1><p>${subtitles[state.view]}</p></div>${overview ? `<div class="hero-brief"><div class="brief-title"><span class="dot"></span>${pending ? 'Your next move' : 'Room to breathe'}</div><div class="brief-copy"><strong class="numeric" data-count="hero-pending">${String(pending).padStart(2, '0')}</strong><span>${pending ? 'orders waiting<br>for your okay' : 'orders waiting.<br>You’re all caught up.'}</span></div><div class="hero-actions"><button class="button button-primary" ${pending ? 'data-action="pending"' : 'data-view="orders"'}>${pending ? `Review ${pending} orders` : 'View orders'} ${icon('arrow')}</button><button class="icon-button" data-action="commands" aria-label="Find an action" title="Find an action">${icon('search')}</button></div></div>` : ''}<div class="actions">${(state.view === 'overview' || (state.view === 'orders' && state.scope === 'period')) ? `<label class="select-wrap">${icon('calendar')}<span class="sr-only">Reporting period</span><select id="period"><option value="7" ${state.days === 7 ? 'selected' : ''}>Last 7 days</option><option value="30" ${state.days === 30 ? 'selected' : ''}>Last 30 days</option></select></label>` : ''}<button class="icon-button" data-action="refresh" aria-label="Refresh workspace" ${state.loading ? 'disabled' : ''}>${icon('refresh')}</button></div></div>`;
 }
 
 function renderPage(animate = false) {
@@ -103,6 +108,18 @@ function renderPage(animate = false) {
   const nextScene = $('.hero-scene', main);
   if (previousScene && nextScene) nextScene.replaceWith(previousScene);
   observeScenes();
+  rollCounts();
+}
+const lastCounts = new Map();
+// Counts that changed since they were last shown roll toward their new value, so an order visibly moves between stages.
+function rollCounts() {
+  document.querySelectorAll('[data-count]').forEach(node => {
+    const key = node.dataset.count, value = Number(node.textContent.replace(/[^\d.-]/g, '')), before = lastCounts.get(key);
+    lastCounts.set(key, value);
+    if (before === undefined || before === value || !Number.isFinite(value)) return;
+    node.classList.remove('count-up', 'count-down'); void node.offsetWidth;
+    node.classList.add(value > before ? 'count-up' : 'count-down');
+  });
 }
 function metrics() {
   const s = state.data.summary;
@@ -112,7 +129,7 @@ function metrics() {
       ['Total orders', s.orders.toLocaleString(), `In the last ${state.days} days`, 'bag'],
       ['Awaiting confirmation', s.pending.toLocaleString(), 'Across all dates', 'clock'],
       ['Active products', s.products.toLocaleString(), 'Across your entire catalog', 'box'],
-    ].map(([label, value, note, glyph]) => `<div class="metric"><div class="metric-label">${label}${icon(glyph)}</div><strong class="metric-value numeric">${value}</strong><p class="metric-note">${note}</p></div>`).join('')}</section>`;
+    ].map(([label, value, note, glyph]) => `<div class="metric"><div class="metric-label">${label}${icon(glyph)}</div><strong class="metric-value numeric" data-count="metric-${label}">${value}</strong><p class="metric-note">${note}</p></div>`).join('')}</section>`;
 }
 function chart() {
   const series = state.data.series;
@@ -158,11 +175,11 @@ function commands() {
 }
 function overview() {
   const d = state.data, low = d.products.filter(p => p.active && p.stock <= 5).length;
-  return metrics() + `<div class="main-grid">${chart()}<section class="panel focus-panel"><div class="panel-head"><div><span class="eyebrow">Make room for what matters</span><h2>Your short list.</h2><p>Keep orders and customer requests moving.</p></div>${icon('leaf')}</div><div class="attention">
+  return metrics() + `<div class="main-grid"><section class="panel focus-panel"><div class="panel-head"><div><span class="eyebrow">Make room for what matters</span><h2>Your short list.</h2><p>Keep orders and customer requests moving.</p></div>${icon('leaf')}</div><div class="attention">
     <button class="attention-row" data-action="pending"><span class="attention-icon numeric">01</span><span><span class="attention-title">${d.summary.pending} orders to confirm</span><small>Give your customers a happy update</small></span>${icon('chevron')}</button>
     <button class="attention-row" data-action="low-stock"><span class="attention-icon numeric">02</span><span><span class="attention-title">${low} products running low</span><small>A good time to check your shelves</small></span>${icon('chevron')}</button>
     <button class="attention-row" data-view="automation"><span class="attention-icon numeric">03</span><span><span class="attention-title">${d.failures ? `${d.failures} jobs need a look` : 'Your automation, at a glance'}</span><small>${d.automation ? 'Replies are enabled' : 'Replies are paused'}</small></span>${icon('chevron')}</button>
-    ${handoverButton('04')}</div><div class="bot-foot">${icon('shield')}<span>${isDemo() ? 'Sample activity · explore with confidence' : d.worker_age_seconds !== null && d.worker_age_seconds < 120 ? 'Worker heartbeat received recently' : 'Worker heartbeat needs attention'}</span></div></section></div>${orderTable(true)}`;
+    ${handoverButton('04')}</div><div class="bot-foot">${icon('shield')}<span>${isDemo() ? 'Sample activity · explore with confidence' : d.worker_age_seconds !== null && d.worker_age_seconds < 120 ? 'Worker heartbeat received recently' : 'Worker heartbeat needs attention'}</span></div></section>${chart()}</div>${orderTable(true)}`;
 }
 function handoverButton(marker) {
   const count = isDemo() ? sampleHandovers.length : state.data.handover_count || 0;
@@ -170,7 +187,7 @@ function handoverButton(marker) {
 }
 function orderPipeline() {
   const stages = [['pending', 'To confirm', 'clock'], ['confirmed', 'To prepare', 'box'], ['shipped', 'On the way', 'arrow'], ['delivered', 'Delivered', 'check']];
-  return `<section class="pipeline" aria-label="Order pipeline"><div class="pipeline-caption"><span class="eyebrow">The order journey</span><span>${state.scope === 'period' ? `Last ${state.days} days` : state.scope === 'open' ? 'Needs attention · all dates' : 'All dates'}</span></div><div class="pipeline-stages">${stages.map(([status, label, glyph], index) => `<button class="pipeline-stage" data-stage="${status}" aria-label="${label}: ${(state.data.order_counts?.[status] ?? state.data.orders.filter(o => o.status === status).length)} orders" aria-pressed="${state.filter === status}"><span class="stage-top"><span class="stage-number">0${index + 1}</span>${icon(glyph)}</span><strong class="numeric">${(state.data.order_counts?.[status] ?? state.data.orders.filter(o => o.status === status).length)}</strong><span>${label}</span>${icon('chevron')}</button>`).join('')}</div></section>`;
+  return `<section class="pipeline" aria-label="Order pipeline"><div class="pipeline-caption"><span class="eyebrow">The order journey</span><span>${state.scope === 'period' ? `Last ${state.days} days` : state.scope === 'open' ? 'Needs attention · all dates' : 'All dates'}</span></div><div class="pipeline-stages">${stages.map(([status, label, glyph], index) => `<button class="pipeline-stage" data-stage="${status}" aria-label="${label}: ${(state.data.order_counts?.[status] ?? state.data.orders.filter(o => o.status === status).length)} orders" aria-pressed="${state.filter === status}"><span class="stage-top"><span class="stage-number">0${index + 1}</span>${icon(glyph)}</span><strong class="numeric" data-count="stage-${status}">${(state.data.order_counts?.[status] ?? state.data.orders.filter(o => o.status === status).length)}</strong><span>${label}</span>${icon('chevron')}</button>`).join('')}</div></section>`;
 }
 function filteredOrders(sort = state.sort) {
   const q = state.query.trim().toLowerCase();
@@ -253,7 +270,7 @@ async function refresh(notify = false) {
     state.loadedPath = path;
     if (notify) toast(isDemo() ? 'Preview refreshed.' : 'Workspace is up to date.');
   } catch (error) { if (request === state.request) state.error = error.message; }
-  finally { if (request === state.request) { state.loading = false; renderPage(); const count = $('.nav-count'); if (count) count.textContent = state.data.summary.pending; if (restoreFocus && document.activeElement === document.body) $(restoreFocus)?.focus({preventScroll: true}); } }
+  finally { if (request === state.request) { state.loading = false; renderPage(); const count = $('.nav-count'); if (count) { count.textContent = state.data.summary.pending; rollCounts(); } if (restoreFocus && document.activeElement === document.body) $(restoreFocus)?.focus({preventScroll: true}); } }
 }
 async function navigate(view, filter, restored = null) {
   clearTimeout(searchTimer);
@@ -478,7 +495,8 @@ document.addEventListener('click', async event => {
     try {
       if (isDemo()) demoStatus(id, status);
       else await api('/admin/order-status', {method: 'POST', body: JSON.stringify({command_id: dialog.dataset.commandId, order_id: id, expected_version: Number(dialog.dataset.version), status})});
-      busy(false); dialog.close(); invalidateSnapshots(); await refresh(); toast(isDemo() ? 'Sample order updated.' : 'Order update saved.');
+      const code = detailOrder?.code || 'Order';
+      busy(false); dialog.close(); invalidateSnapshots(); await refresh(); toast(statusToast(code, status));
     } catch (error) { $('#form-error', dialog).textContent = error.message; }
     finally { busy(false); node.textContent = label; } return;
   }
