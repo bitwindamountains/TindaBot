@@ -35,6 +35,9 @@ ORDER_HEADERS = [
     "items",
     "total_php",
 ]
+LEGACY_ORDER_HEADERS = [
+    {"created_at_manila": "created_at", "total_php": "total_minor"}.get(h, h) for h in ORDER_HEADERS
+]
 COMMAND_HEADERS = ["command_id", "order_id", "expected_version", "action", "result"]
 
 
@@ -60,7 +63,7 @@ class Integrations:
             self._sheet = client.open_by_key(self.settings.google_sheet_id)
         return self._sheet
 
-    def send_message(self, psid, message, tag=None):
+    def send_message(self, psid, message, messaging_type="RESPONSE"):
         try:
             response = self.http.post(
                 f"https://graph.facebook.com/{self.settings.meta_graph_version}/{self.settings.meta_page_id}/messages",
@@ -69,12 +72,8 @@ class Integrations:
                 },
                 json={
                     "recipient": {"id": psid},
+                    "messaging_type": messaging_type,
                     "message": message,
-                    **(
-                        {"messaging_type": "MESSAGE_TAG", "tag": tag}
-                        if tag
-                        else {"messaging_type": "RESPONSE"}
-                    ),
                 },
             )
         except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
@@ -127,7 +126,11 @@ class Integrations:
 
     def export_order(self, order):
         worksheet = self.sheet().worksheet("Orders")
-        if worksheet.row_values(1) != ORDER_HEADERS:
+        headers = worksheet.row_values(1)
+        if headers == LEGACY_ORDER_HEADERS:
+            # Sheets set up before readable time/peso columns: rename the two headers in place.
+            worksheet.update([ORDER_HEADERS], "A1:M1", value_input_option="RAW")
+        elif headers != ORDER_HEADERS:
             raise DeliveryError("sheet_headers")
         # Only the ID column: the whole sheet grows with every order ever placed.
         matches = [i + 1 for i, value in enumerate(worksheet.col_values(1)) if value == order.id]

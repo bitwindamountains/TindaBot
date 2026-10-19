@@ -1,5 +1,7 @@
 # Automation: the teaching loop
 
+> **Status, 19 October 2026:** steps 1–4 are built and released. The Meta question resolved against the tag: Meta retired the post-purchase tag, so order updates are sent only within the 24-hour window. Open: Taglish order-update copy and grouping of differently spelled misses.
+
 ## Problem Statement
 
 How might we make the Automation page a place where the seller can see what the bot handled, teach it what it missed, and keep customers informed, without giving up the deterministic, auditable bot?

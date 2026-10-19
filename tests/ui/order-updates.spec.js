@@ -6,7 +6,7 @@ test('order update switches show the customer message and shipping asks for an o
   const shipped = page.getByRole('switch', {name: 'Message customers: Shipped or ready for pickup'});
   await expect(shipped).toHaveAttribute('aria-checked', 'false');
   await expect(page.getByText('“Your order TB-1048 is on its way!”')).toBeVisible();
-  await expect(page.getByText(/skipped until your operator turns on Meta’s post-purchase tag/)).toBeVisible();
+  await expect(page.getByText(/within 24 hours of the customer’s last message, so older conversations are skipped/)).toBeVisible();
   expect((await new AxeBuilder({page}).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
   await shipped.click();
   await expect(shipped).toHaveAttribute('aria-checked', 'true');

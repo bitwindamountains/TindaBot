@@ -279,8 +279,7 @@ const updateLabels = {confirmed: 'Order confirmed', shipped: 'Shipped or ready f
 function orderUpdatesPanel(d) {
   if (!d.order_updates) return '';
   const rows = Object.entries(d.order_updates).map(([event, on]) => `<div class="setting-row"><div><h3>${updateLabels[event]}</h3><p class="update-preview">“${escape(d.order_update_examples?.[event] || '')}”</p></div><button class="switch" role="switch" aria-label="Message customers: ${updateLabels[event]}" aria-checked="${on}" data-action="order-update" data-event="${event}"></button></div>`).join('');
-  const window = d.order_update_tag ? 'Customers who last messaged over 24 hours ago get them as Meta post-purchase updates.' : 'Customers who last messaged over 24 hours ago are skipped until your operator turns on Meta’s post-purchase tag.';
-  return `<section class="panel order-updates" aria-labelledby="updates-title"><div class="panel-head"><div><h2 id="updates-title">Order updates</h2><p>Message customers when you move their order forward.</p></div>${icon('bag')}</div>${rows}<div class="setting-row"><p>${window} Pausing automated replies pauses updates too.${d.delivery_mode === 'live' ? '' : ' In dry run, updates are recorded, not sent.'}</p></div></section>`;
+  return `<section class="panel order-updates" aria-labelledby="updates-title"><div class="panel-head"><div><h2 id="updates-title">Order updates</h2><p>Message customers when you move their order forward.</p></div>${icon('bag')}</div>${rows}<div class="setting-row"><p>Messenger only allows these within 24 hours of the customer’s last message, so older conversations are skipped. Pausing automated replies pauses updates too.${d.delivery_mode === 'live' ? '' : ' In dry run, updates are recorded, not sent.'}</p></div></section>`;
 }
 function automationInsights(d) {
   const i = d.insights;

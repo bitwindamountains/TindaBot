@@ -88,12 +88,37 @@ def test_sheet_duplicate_rows_stop_export(adapter):
 
 
 @respx.mock
-def test_tagged_order_update_uses_message_tag(adapter):
+def test_order_updates_use_the_update_messaging_type(adapter):
     route = respx.post("https://graph.facebook.com/v99.0/100/messages").mock(
         return_value=httpx.Response(200, json={"message_id": "mid"})
     )
-    adapter.send_message("200", {"text": "update"}, "POST_PURCHASE_UPDATE")
+    adapter.send_message("200", {"text": "update"}, "UPDATE")
     adapter.send_message("200", {"text": "reply"})
-    tagged, plain = (json.loads(call.request.content) for call in route.calls)
-    assert tagged["messaging_type"] == "MESSAGE_TAG" and tagged["tag"] == "POST_PURCHASE_UPDATE"
-    assert plain["messaging_type"] == "RESPONSE" and "tag" not in plain
+    update, reply = (json.loads(call.request.content) for call in route.calls)
+    assert update["messaging_type"] == "UPDATE" and reply["messaging_type"] == "RESPONSE"
+    assert "tag" not in update
+
+
+def test_sheets_with_the_old_order_headers_are_upgraded_in_place(adapter):
+    from tindabot.integrations import LEGACY_ORDER_HEADERS
+
+    worksheet = Mock()
+    worksheet.row_values.return_value = LEGACY_ORDER_HEADERS
+    worksheet.col_values.return_value = ["created_at"]
+    adapter._sheet = Mock()
+    adapter._sheet.worksheet.return_value = worksheet
+    order = SimpleNamespace(
+        id="order-id",
+        code="C",
+        created_at=0,
+        status="pending",
+        payment_status="unpaid",
+        version=1,
+        details={},
+        items=[],
+        total_minor=100,
+    )
+    adapter.export_order(order)
+    first = worksheet.update.call_args_list[0]
+    assert first.args == ([ORDER_HEADERS], "A1:M1")
+    worksheet.append_row.assert_called_once()

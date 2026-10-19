@@ -427,7 +427,6 @@ def register_workspace(app, db, settings, operator):
                 "order_updates": {
                     event: bool(updates and updates.value.get(event)) for event in ORDER_UPDATES
                 },
-                "order_update_tag": settings.order_update_tag,
                 "order_update_examples": {
                     event: order_update("TB-1048", event, pickup=False) for event in ORDER_UPDATES
                 },
