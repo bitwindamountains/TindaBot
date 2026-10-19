@@ -40,6 +40,21 @@ COPY = {
 }
 
 
+ORDER_UPDATES = ("confirmed", "shipped", "delivered", "paid")
+
+
+def order_update(code: str, status: str, pickup: bool, note: str = "") -> str:
+    body = {
+        "confirmed": f"Your order {code} is confirmed. We'll message you when it's on its way.",
+        "shipped": f"Your order {code} is ready for pickup."
+        if pickup
+        else f"Your order {code} is on its way!",
+        "delivered": f"Your order {code} was marked delivered. Salamat!",
+        "paid": f"We received your payment for order {code}. Salamat!",
+    }[status]
+    return f"{body}\n{note}" if note else body
+
+
 def money(value: int) -> str:
     return f"PHP {value / 100:,.2f}"
 

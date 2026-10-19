@@ -20,6 +20,7 @@ from sqlalchemy import Integer, and_, cast, func, or_, select
 from tindabot.db import Conversation, Inbox, Order, OrderActivity, Outbox, Product, Record
 from tindabot.handover import waiting
 from tindabot.machine import transition
+from tindabot.messages import ORDER_UPDATES, order_update
 from tindabot.orders import refund_total
 from tindabot.recovery import inspect_job
 from tindabot.service import apply_actions, view_for
@@ -344,6 +345,7 @@ def register_workspace(app, db, settings, operator):
             product_count = session.scalar(select(func.count()).select_from(Product))
             heartbeat = session.get(Record, "worker-heartbeat")
             control = session.get(Record, "automation")
+            updates = session.get(Record, "order-updates")
             failed = session.scalar(
                 select(func.count()).select_from(Inbox).where(Inbox.status == "failed")
             )
@@ -396,6 +398,13 @@ def register_workspace(app, db, settings, operator):
                 "automation": settings.automation_enabled
                 and (control.value.get("enabled", True) if control else True),
                 "automation_locked": not settings.automation_enabled,
+                "order_updates": {
+                    event: bool(updates and updates.value.get(event)) for event in ORDER_UPDATES
+                },
+                "order_update_tag": settings.order_update_tag,
+                "order_update_examples": {
+                    event: order_update("TB-1048", event, pickup=False) for event in ORDER_UPDATES
+                },
                 "delivery_mode": settings.delivery_mode,
                 "worker_age_seconds": max(0, now - heartbeat.updated_at) if heartbeat else None,
                 "failures": failed + jobs.get("failed", 0) + jobs.get("uncertain", 0),

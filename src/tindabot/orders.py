@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import func, select
 
 from tindabot.db import Order, OrderActivity, Product, Record, enqueue, insert_once
+from tindabot.messages import ORDER_UPDATES, order_update
 
 # The Philippines has no daylight saving; a fixed offset needs no tz database.
 MANILA = timezone(timedelta(hours=8), "Asia/Manila")
@@ -196,8 +197,41 @@ def apply_order_action(
     return result
 
 
+def queue_order_update(session, order, status, note, now):
+    """Tell the customer, in the same transaction as the status change, if the seller opted in."""
+    switches = session.get(Record, "order-updates")
+    if (
+        status not in ORDER_UPDATES
+        or order.anonymized
+        or not (switches and switches.value.get(status))
+    ):
+        return
+    pickup = order.details.get("delivery") == "pickup"
+    enqueue(
+        session,
+        key=f"update:{order.id}:{order.version}",
+        destination="messenger",
+        conversation=order.conversation_key,
+        payload={
+            "message": {"text": order_update(order.code, status, pickup, note)},
+            "order_update": True,
+            # The seller's own action, so it is sent even while they are handling the chat.
+            "allow_paused": True,
+            "event_at": now,
+        },
+    )
+
+
 def change_status(
-    session, order_id, expected_version, status, command_id, now=None, *, actor="operator"
+    session,
+    order_id,
+    expected_version,
+    status,
+    command_id,
+    now=None,
+    *,
+    actor="operator",
+    note="",
 ):
     now = now or time.time()
     key = f"command:{command_id}"
@@ -253,5 +287,7 @@ def change_status(
     )
     result = {"order_id": order.id, "status": status, "version": order.version}
     session.get(Record, key).value = result
+    if actor != "system":
+        queue_order_update(session, order, status, note.strip(), now)
     enqueue(session, key=f"sheet:{order.id}:{order.version}", destination="sheets", order=order.id)
     return result

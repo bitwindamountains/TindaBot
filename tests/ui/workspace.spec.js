@@ -33,7 +33,7 @@ test('overview, filtering, order progression, CSV, and inventory adjustment', as
   await page.getByRole('button', {name: 'Automation', exact: true}).click();
   await page.getByRole('switch', {name: 'Automated replies'}).click();
   await page.getByRole('button', {name: 'Pause replies', exact: true}).click();
-  await expect(page.getByRole('switch')).toHaveAttribute('aria-checked', 'false');
+  await expect(page.getByRole('switch', {name: 'Automated replies'})).toHaveAttribute('aria-checked', 'false');
   expect(errors).toEqual([]);
 });
 

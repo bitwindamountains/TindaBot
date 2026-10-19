@@ -24,6 +24,7 @@ class StatusCommand(BaseModel):
     order_id: str = Field(max_length=36)
     expected_version: int = Field(ge=1)
     status: str = Field(pattern=r"^(pending|confirmed|paid|shipped|delivered|cancelled)$")
+    note: str = Field(default="", max_length=160)
 
 
 class StockCommand(BaseModel):
@@ -48,6 +49,10 @@ class RefundCommand(BaseModel):
 
 class Toggle(BaseModel):
     enabled: bool
+
+
+class OrderUpdateToggle(Toggle):
+    event: str = Field(pattern=r"^(confirmed|shipped|delivered|paid)$")
 
 
 class PauseCommand(Toggle):
@@ -198,6 +203,7 @@ def create_app(settings=None, database=None):
                     command.expected_version,
                     command.status,
                     command.command_id,
+                    note=command.note,
                 )
         except OrderConflict as exc:
             raise HTTPException(409, str(exc)) from exc
@@ -243,6 +249,16 @@ def create_app(settings=None, database=None):
             )
             control.value = {"enabled": command.enabled}
         return {"enabled": command.enabled}
+
+    @app.post("/admin/order-updates", dependencies=[Depends(operator)])
+    def order_updates(command: OrderUpdateToggle):
+        with db.sessions.begin() as session:
+            insert_once(session, Record, {"key": "order-updates", "value": {}}, "key")
+            switches = session.scalar(
+                select(Record).where(Record.key == "order-updates").with_for_update()
+            )
+            switches.value = {**switches.value, command.event: command.enabled}
+            return switches.value
 
     @app.post("/admin/conversations/{psid}/pause", dependencies=[Depends(operator)])
     def pause(psid: str, command: PauseCommand):
