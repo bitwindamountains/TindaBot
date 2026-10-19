@@ -230,9 +230,38 @@ function automationChecklist(d, healthy) {
   if (!steps.length) steps.push(['Keep checking delivery', 'A recent heartbeat means the worker is reporting. It does not confirm that every provider connection is working. Check a permitted test order end to end.']);
   return `<aside class="panel automation-checklist" aria-label="Recommended checks"><div class="panel-head"><div><span class="eyebrow">Next steps</span><h2>Know what to check.</h2></div>${icon('shield')}</div><ol>${steps.map(([title, copy]) => `<li><h3>${title}</h3><p>${copy}</p></li>`).join('')}</ol></aside>`;
 }
+function automationInsights(d) {
+  const i = d.insights;
+  if (!i) return '';
+  const headline = i.conversations ? `Today, TindaBot handled <em class="numeric">${i.self_served} of ${i.conversations}</em> conversations on its own.` : 'No customer conversations yet today.';
+  const misses = i.misses.length
+    ? `<ol class="miss-list">${i.misses.map((miss, index) => `<li><div><p class="miss-text">“${escape(miss.text)}”</p><span class="miss-meta numeric">Asked ${miss.count}× · last ${escape(date(miss.last_at, {month: 'short', day: 'numeric'}))}</span></div><button class="button" data-action="teach-faq" data-miss="${index}" aria-label="Add to FAQ: ${escape(miss.text)}">Add to FAQ</button></li>`).join('')}</ol>`
+    : '<p class="miss-empty">Every question this week matched a button or an FAQ. Nothing to teach yet.</p>';
+  return `<section class="panel automation-insights" aria-labelledby="insights-title"><div class="insights-head"><h2 id="insights-title">${headline}</h2><p>${isDemo() ? 'Sample activity · ' : ''}<span class="numeric">${i.needed_you}</span> needed you today · <span class="numeric">${i.missed_week}</span> unanswered ${i.missed_week === 1 ? 'question' : 'questions'} this week</p></div><div class="insights-body"><h3>Questions TindaBot couldn’t answer <span class="muted">· last 7 days</span></h3>${misses}</div></section>`;
+}
+function teachFaq(index) {
+  const miss = state.data.insights.misses[index];
+  const sheet = state.data.sheet_url ? `<a class="button" href="${escape(state.data.sheet_url)}" target="_blank" rel="noopener">Open your Sheet</a>` : '';
+  openModal('Teach TindaBot', `<p>Customers asked “${escape(miss.text)}” ${miss.count}×. Add an FAQ row so TindaBot answers next time.</p><form id="faq-form" novalidate><label for="faq-keywords">Keywords</label><input class="field" id="faq-keywords" value="${escape(miss.keywords)}" required maxlength="500" aria-describedby="faq-keywords-help"><p class="field-help" id="faq-keywords-help">Separate keywords with commas. Each one must appear word for word in a message, so keep them short, like <em>size small, small size</em>.</p><label for="faq-answer">Answer</label><textarea class="field" id="faq-answer" rows="4" maxlength="1800" required></textarea><p id="form-error" class="error-message" role="alert"></p><p class="field-help">Paste the copied row into the FAQ tab of your Google Sheet. TindaBot reads new rows on its next Sheet sync, about once a minute while live delivery is on.</p><div class="dialog-actions">${sheet}<button class="button button-primary" type="submit">Copy FAQ row</button></div></form>`);
+  $('#faq-answer').focus();
+}
+async function copyFaqRow(form) {
+  const keywords = $('#faq-keywords', form).value.trim(), answer = $('#faq-answer', form).value.trim();
+  if (!keywords || !answer) { $('#form-error', form).textContent = 'Add at least one keyword and an answer.'; return; }
+  // An HTML table pastes into two Sheet cells and keeps line breaks; plain text is the fallback.
+  const cell = (value) => escape(value).replaceAll('\n', '<br>');
+  const html = `<table><tr><td>${cell(keywords)}</td><td>${cell(answer)}</td></tr></table>`;
+  const plain = `${keywords}\t${answer.replace(/\s*\n\s*/g, ' ')}`;
+  try {
+    await navigator.clipboard.write([new ClipboardItem({'text/html': new Blob([html], {type: 'text/html'}), 'text/plain': new Blob([plain], {type: 'text/plain'})})]);
+  } catch {
+    try { await navigator.clipboard.writeText(plain); } catch { $('#form-error', form).textContent = 'Copy is blocked in this browser. Select the keywords and answer and copy them by hand.'; return; }
+  }
+  dialog.close(); toast('FAQ row copied. Paste it into the FAQ tab of your Sheet.');
+}
 function automation() {
   const d = state.data, healthy = d.worker_age_seconds !== null && d.worker_age_seconds < 120;
-  return handoverButton() + automationBrief(d, healthy) + `<div class="automation-layout"><section class="panel automation-panel" aria-label="Automation settings"><div class="panel-head"><div><h2>Messenger assistant</h2><p>A helping hand, with you in control.</p></div>${icon('bot')}</div>
+  return automationInsights(d) + handoverButton() + (d.insights ? '<h2 class="section-divider">Operator checks</h2>' : '') + automationBrief(d, healthy) + `<div class="automation-layout"><section class="panel automation-panel" aria-label="Automation settings"><div class="panel-head"><div><h2>Messenger assistant</h2><p>A helping hand, with you in control.</p></div>${icon('bot')}</div>
     <div class="setting-row"><div><h3>Automated replies</h3><p>${d.automation_locked ? 'Disabled by server configuration. Ask your operator to enable automation.' : 'Let TindaBot guide customers from browsing to checkout.'}</p></div><button class="switch" role="switch" aria-label="Automated replies" aria-checked="${d.automation}" data-action="automation" ${d.automation_locked ? 'disabled' : ''}></button></div>
     <div class="setting-row"><div><h3>Delivery mode</h3><p>${d.delivery_mode === 'live' ? 'Messages can be sent to customers.' : 'Messages are recorded without being sent to customers.'}</p></div><span class="badge">${d.delivery_mode === 'live' ? 'Live' : 'Dry run'}</span></div>
     <div class="setting-row"><div><h3>Worker heartbeat</h3><p>${isDemo() ? 'Illustrative activity for this preview.' : d.worker_age_seconds === null ? 'No heartbeat received. Start the worker and refresh.' : `Last received ${Math.floor(d.worker_age_seconds)} seconds before this refresh.`}</p></div><span class="badge ${healthy ? 'badge-delivered' : 'badge-pending'}">${isDemo() ? 'Sample' : healthy ? 'Recent' : 'Check worker'}</span></div>
@@ -456,6 +485,7 @@ document.addEventListener('click', async event => {
   if (action === 'close') return closeModal();
   if (action === 'connect') return connectModal();
   if (action === 'guide') return guide();
+  if (action === 'teach-faq') return teachFaq(Number(node.dataset.miss));
   if (action === 'stock') return stockModal(node.dataset.sku);
   if (action === 'refresh') return refresh(true);
   if (action === 'more-orders') return loadMoreOrders();
@@ -508,6 +538,7 @@ document.addEventListener('click', async event => {
 document.addEventListener('submit', async event => {
   const form = event.target;
   if (['note-form', 'refund-form'].includes(form.id)) { event.preventDefault(); return saveOrderEntry(form); }
+  if (form.id === 'faq-form') { event.preventDefault(); return copyFaqRow(form); }
   if (!['connect-form', 'stock-form', 'automation-form'].includes(form.id)) return;
   event.preventDefault();
   const submit = $('button[type="submit"]', form), label = submit.textContent;

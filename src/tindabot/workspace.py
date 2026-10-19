@@ -4,6 +4,7 @@ import base64
 import hashlib
 import json
 import math
+import re
 import time
 from pathlib import Path
 from typing import Literal
@@ -45,6 +46,50 @@ def activity_page(session, order_id, before=None):
             for e in events[:50]
         ],
         "next_activity_cursor": events[49].id if len(events) > 50 else None,
+    }
+
+
+def automation_insights(session, now):
+    """How the bot did today, and this week's questions it could not answer."""
+    today = int((now + MANILA_OFFSET) // DAY) * DAY - MANILA_OFFSET
+    customer = Inbox.payload["echo"].as_boolean().is_(False)
+    missed = Inbox.payload["missed"].as_boolean().is_(True)
+
+    def conversations(*where):
+        return set(session.scalars(select(Inbox.conversation_key).where(*where).distinct()))
+
+    talked = conversations(customer, Inbox.occurred_at >= today)
+    stuck = conversations(customer, missed, Inbox.occurred_at >= today)
+    handed = set(
+        session.scalars(
+            select(Outbox.conversation_key)
+            .where(Outbox.business_key.startswith("handover:"), Outbox.created_at >= today)
+            .distinct()
+        )
+    )
+    needed = (stuck | handed) & talked
+    groups = {}
+    # ponytail: exact normalized grouping; add keyword overlap if pilot data shows Taglish variants rarely repeat.
+    for payload, occurred in session.execute(
+        select(Inbox.payload, Inbox.occurred_at)
+        .where(customer, missed, Inbox.occurred_at >= today - 6 * DAY)
+        .order_by(Inbox.occurred_at.desc())
+        .limit(500)
+    ):
+        value = payload.get("value", "")
+        key = " ".join(re.sub(r"[^\w\s]", " ", value.casefold()).split())
+        if not key or payload.get("postback"):
+            continue
+        group = groups.setdefault(key, {"text": value[:200], "keywords": key, "count": 0})
+        group["count"] += 1
+        group.setdefault("last_at", occurred)
+    misses = sorted(groups.values(), key=lambda g: (-g["count"], -g["last_at"]))
+    return {
+        "conversations": len(talked),
+        "self_served": len(talked - needed),
+        "needed_you": len(needed),
+        "missed_week": sum(g["count"] for g in misses),
+        "misses": misses[:10],
     }
 
 
@@ -308,6 +353,10 @@ def register_workspace(app, db, settings, operator):
                     "delivery_uncertain": jobs.get("uncertain", 0),
                 },
                 "queue": sum(jobs.get(status, 0) for status in ("pending", "processing")),
+                "insights": automation_insights(session, now),
+                "sheet_url": f"https://docs.google.com/spreadsheets/d/{settings.google_sheet_id}/edit"
+                if settings.google_sheet_id
+                else None,
                 "handover_count": session.scalar(
                     select(func.count())
                     .select_from(Conversation)

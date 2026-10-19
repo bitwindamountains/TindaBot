@@ -2,6 +2,7 @@ import time
 
 import pytest
 from conftest import checkout, send
+from sqlalchemy import select
 
 from tindabot.db import Inbox, Order, Outbox, Record
 
@@ -189,3 +190,27 @@ def test_diagnostics_distinguish_failed_events_and_uncertain_deliveries(client, 
         "delivery_uncertain": 1,
     }
     assert data["failures"] == 3
+
+
+def test_insights_count_self_served_conversations_and_group_missed_questions(client, db, settings):
+    send(db, settings, "how much po?", psid="201")  # FAQ hit: handled by the bot
+    send(db, settings, "May size small pa po?", psid="202")
+    send(db, settings, "may size small pa po", psid="203")
+    send(db, settings, "SELLER", psid="204")
+    with db.sessions() as session:
+        flags = {
+            e.payload["value"]: e.payload.get("missed") for e in session.scalars(select(Inbox))
+        }
+    assert flags["how much po?"] is None and flags["May size small pa po?"] is True
+    insights = client.get("/admin/workspace", headers=AUTH).json()["insights"]
+    assert insights["conversations"] == 4
+    assert insights["needed_you"] == 3 and insights["self_served"] == 1
+    assert insights["missed_week"] == 2
+    assert insights["misses"] == [
+        {
+            "text": "may size small pa po",
+            "keywords": "may size small pa po",
+            "count": 2,
+            "last_at": insights["misses"][0]["last_at"],
+        }
+    ]
