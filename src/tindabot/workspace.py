@@ -7,18 +7,22 @@ import math
 import re
 import time
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Literal
 
 from fastapi import Depends, HTTPException, Query, Response
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 from sqlalchemy import Integer, and_, cast, func, or_, select
 
 from tindabot.db import Conversation, Inbox, Order, OrderActivity, Outbox, Product, Record
 from tindabot.handover import waiting
+from tindabot.machine import transition
 from tindabot.orders import refund_total
 from tindabot.recovery import inspect_job
+from tindabot.service import apply_actions, view_for
 
 WEB = Path(__file__).with_name("web")
 DAY = 86_400
@@ -47,6 +51,23 @@ def activity_page(session, order_id, before=None):
         ],
         "next_activity_cursor": events[49].id if len(events) > 50 else None,
     }
+
+
+class TestChatMessage(BaseModel):
+    state: Literal[
+        "IDLE",
+        "BROWSING",
+        "QTY",
+        "CART",
+        "DELIVERY",
+        "NAME",
+        "PHONE",
+        "ADDRESS",
+        "PAYMENT",
+        "CONFIRMING",
+    ] = "IDLE"
+    context: dict = Field(default_factory=dict)
+    value: str = Field(min_length=1, max_length=2000)
 
 
 def automation_insights(session, now):
@@ -153,6 +174,37 @@ def register_workspace(app, db, settings, operator):
         GZipMiddleware(StaticFiles(directory=WEB), minimum_size=1000),
         name="workspace-assets",
     )
+
+    @app.post("/admin/workspace/test-chat", dependencies=[Depends(operator)])
+    def test_chat(message: TestChatMessage):
+        """Run the live conversation logic against the real catalog. Nothing is saved or sent."""
+        if len(json.dumps(message.context)) > 8000:
+            raise HTTPException(422, "Test conversation is too long; start over")
+        now = time.time()
+        with db.sessions() as session:
+            # The test conversation owns no orders, so tracking replies stay empty.
+            view = view_for(session, SimpleNamespace(key="workspace-test-chat"), settings, now)
+            try:
+                decision = transition(message.state, message.context, message.value, view)
+                replies, _ = apply_actions(
+                    session,
+                    decision,
+                    settings,
+                    view,
+                    place_order=lambda ctx: (SimpleNamespace(code="TEST-ORDER"), False),
+                    hand_over=lambda ctx: None,
+                )
+            except (KeyError, TypeError, ValueError, AttributeError) as exc:
+                raise HTTPException(422, "Test conversation is out of date; start over") from exc
+            finally:
+                session.rollback()
+        return {
+            "state": decision.state,
+            "context": decision.context,
+            "replies": replies,
+            "handed_over": "pause" in decision.actions,
+            "catalog_fresh": view["catalog_fresh"],
+        }
 
     @app.get("/", include_in_schema=False)
     def workspace():

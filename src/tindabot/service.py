@@ -51,6 +51,63 @@ def view_for(session, conversation, settings, now):
     }
 
 
+def apply_actions(session, decision, settings, view, *, place_order, hand_over):
+    """Carry out what transition() asked for. Shared by live messages and the test chat."""
+    replies, ctx, receipt = decision.replies, decision.context, False
+    for action in decision.actions:
+        if action == "pause":
+            hand_over(ctx)
+        elif action in {"quote", "confirm"}:
+            try:
+                if not view["catalog_fresh"]:
+                    raise OrderConflict("stale_catalog")
+                if action == "quote":
+                    ctx["quote"] = quote(session, ctx, settings)
+                else:
+                    order, changed = place_order(ctx)
+                    if order:
+                        receipt = True
+                        replies = confirmation(
+                            order.code, ctx["payment"], ctx["quote"]["instructions"]
+                        )
+                        decision.state, decision.context = "IDLE", {}
+                        break
+                    if changed:
+                        replies += text(COPY["changed"])
+                replies += text(
+                    summary(ctx),
+                    [
+                        ("Confirm", f"CONFIRM:{ctx['checkout_id']}:{ctx['version']}"),
+                        ("Edit", "EDIT"),
+                        ("Cancel", "CANCEL"),
+                    ],
+                )
+            except OrderConflict as exc:
+                replies = text(
+                    COPY["catalog_unavailable"]
+                    if str(exc) == "stale_catalog"
+                    else COPY["unavailable"],
+                    MENU,
+                )
+                decision.state = "CART"
+                ctx.pop("quote", None)
+                if str(exc) == "unavailable":
+                    available = {
+                        p.sku: p
+                        for p in session.scalars(
+                            select(Product)
+                            .where(Product.active.is_(True))
+                            .execution_options(populate_existing=True)
+                        )
+                    }
+                    ctx["cart"] = {
+                        sku: qty
+                        for sku, qty in ctx.get("cart", {}).items()
+                        if sku in available and available[sku].stock >= qty
+                    }
+    return replies, receipt
+
+
 def process_one(db, settings, now=None, before_commit=None):
     now = now or time.time()
     event_id = None
@@ -155,75 +212,31 @@ def process_one(db, settings, now=None, before_commit=None):
                     if decision.context.get("misses", 0) > misses:
                         # Lives in the inbound payload, so retention and erasure remove it too.
                         event.payload = {**payload, "missed": True}
-                    replies = decision.replies
-                    ctx = decision.context
-                    for action in decision.actions:
-                        if action == "pause":
-                            conversation.paused = True
-                            ctx["handover"] = {
-                                "reason": "stop" if command == "STOP" else "customer",
-                                "since": now,
-                            }
-                            enqueue(
-                                session,
-                                key=f"handover:{event.id}",
-                                destination="email",
-                                conversation=conversation.key,
-                                payload={"handover": True},
-                            )
-                        elif action in {"quote", "confirm"}:
-                            try:
-                                if not view["catalog_fresh"]:
-                                    raise OrderConflict("stale_catalog")
-                                if action == "quote":
-                                    ctx["quote"] = quote(session, ctx, settings)
-                                else:
-                                    order, changed = create_order(
-                                        session, conversation, ctx, settings, now
-                                    )
-                                    if order:
-                                        receipt = True
-                                        replies = confirmation(
-                                            order.code, ctx["payment"], ctx["quote"]["instructions"]
-                                        )
-                                        decision.state, decision.context = "IDLE", {}
-                                        break
-                                    if changed:
-                                        replies += text(COPY["changed"])
-                                replies += text(
-                                    summary(ctx),
-                                    [
-                                        (
-                                            "Confirm",
-                                            f"CONFIRM:{ctx['checkout_id']}:{ctx['version']}",
-                                        ),
-                                        ("Edit", "EDIT"),
-                                        ("Cancel", "CANCEL"),
-                                    ],
-                                )
-                            except OrderConflict as exc:
-                                replies = text(
-                                    COPY["catalog_unavailable"]
-                                    if str(exc) == "stale_catalog"
-                                    else COPY["unavailable"],
-                                    MENU,
-                                )
-                                decision.state = "CART"
-                                ctx.pop("quote", None)
-                                if str(exc) == "unavailable":
-                                    available = {
-                                        p.sku: p
-                                        for p in session.scalars(
-                                            select(Product)
-                                            .where(Product.active.is_(True))
-                                            .execution_options(populate_existing=True)
-                                        )
-                                    }
-                                    ctx["cart"] = {
-                                        sku: qty
-                                        for sku, qty in ctx.get("cart", {}).items()
-                                        if sku in available and available[sku].stock >= qty
-                                    }
+
+                    def hand_over(ctx):
+                        conversation.paused = True
+                        ctx["handover"] = {
+                            "reason": "stop" if command == "STOP" else "customer",
+                            "since": now,
+                        }
+                        enqueue(
+                            session,
+                            key=f"handover:{event.id}",
+                            destination="email",
+                            conversation=conversation.key,
+                            payload={"handover": True},
+                        )
+
+                    replies, receipt = apply_actions(
+                        session,
+                        decision,
+                        settings,
+                        view,
+                        place_order=lambda ctx: create_order(
+                            session, conversation, ctx, settings, now
+                        ),
+                        hand_over=hand_over,
+                    )
                     conversation.state, conversation.context = decision.state, decision.context
                 conversation.updated_at = now
                 conversation.version += 1

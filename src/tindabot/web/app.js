@@ -230,6 +230,50 @@ function automationChecklist(d, healthy) {
   if (!steps.length) steps.push(['Keep checking delivery', 'A recent heartbeat means the worker is reporting. It does not confirm that every provider connection is working. Check a permitted test order end to end.']);
   return `<aside class="panel automation-checklist" aria-label="Recommended checks"><div class="panel-head"><div><span class="eyebrow">Next steps</span><h2>Know what to check.</h2></div>${icon('shield')}</div><ol>${steps.map(([title, copy]) => `<li><h3>${title}</h3><p>${copy}</p></li>`).join('')}</ol></aside>`;
 }
+// Test chat state lives in tab memory only; the server holds nothing between messages.
+const testChat = {state: 'IDLE', context: {}, log: [], busy: false, paused: false, staleNoted: false};
+function resetTestChat() { Object.assign(testChat, {state: 'IDLE', context: {}, log: [], busy: false, paused: false, staleNoted: false}); }
+function chatChoices(choices) {
+  return choices?.length ? `<div class="chat-choices">${choices.map(choice => `<button class="chat-chip" type="button" data-action="test-chat-say" data-payload="${escape(choice.payload)}">${escape(choice.title)}</button>`).join('')}</div>` : '';
+}
+function chatReply(reply) {
+  const cards = reply.attachment?.payload?.elements;
+  if (cards) return `<div class="chat-cards">${cards.map(card => `<div class="chat-card"><strong>${escape(card.title)}</strong><span>${escape(card.subtitle || '')}</span>${chatChoices(card.buttons)}</div>`).join('')}</div>`;
+  return `<div class="chat-bubble chat-bot">${escape(reply.text || '').replaceAll('\n', '<br>')}</div>${chatChoices(reply.quick_replies)}`;
+}
+function chatLog() {
+  if (!testChat.log.length) return '<p class="chat-empty">Try a message your customers send, like <em>hm po?</em> or <em>pa order po</em>.</p>';
+  return testChat.log.map(entry => entry.kind === 'customer' ? `<div class="chat-bubble chat-customer">${escape(entry.text)}</div>` : entry.kind === 'note' ? `<p class="chat-note">${escape(entry.text)}</p>` : chatReply(entry.reply)).join('');
+}
+function testChatPanel() {
+  const head = `<div class="test-chat-head"><div><h2 id="test-chat-title">Talk to your bot</h2><p>Type what a customer would. TindaBot answers with your real catalog and FAQ. Nothing is sent or saved.</p></div>${isDemo() ? '' : button('Start over', 'test-chat-reset')}</div>`;
+  if (isDemo()) return `<section class="panel test-chat" aria-labelledby="test-chat-title">${head}<div class="chat-locked"><p>The test chat uses your real catalog and FAQ, so it works once your shop is connected.</p>${button('Connect to test', 'connect')}</div></section>`;
+  return `<section class="panel test-chat" aria-labelledby="test-chat-title">${head}<div class="chat-log" id="chat-log" role="log" aria-label="Test conversation">${chatLog()}</div><form id="test-chat-form" class="chat-compose"><label class="sr-only" for="test-chat-input">Message as a customer</label><input class="field" id="test-chat-input" autocomplete="off" maxlength="2000" placeholder="Message as a customer…"><button class="button button-primary" type="submit">Send</button></form></section>`;
+}
+function renderChat() {
+  const log = $('#chat-log');
+  if (!log) return;
+  log.innerHTML = chatLog(); log.scrollTop = log.scrollHeight;
+  $('#test-chat-form button[type="submit"]').disabled = testChat.busy;
+}
+async function sayToBot(value, label = value) {
+  if (testChat.busy || !value.trim()) return;
+  testChat.log.push({kind: 'customer', text: label});
+  // Live, a handed-over conversation stays with the seller until the customer sends MENU.
+  if (testChat.paused && !['MENU', 'GET_STARTED'].includes(value.trim().toUpperCase())) {
+    testChat.log.push({kind: 'note', text: 'The seller is handling this conversation, so the bot stays quiet. Send MENU to bring the bot back.'});
+    return renderChat();
+  }
+  testChat.busy = true; testChat.paused = false; renderChat();
+  try {
+    const reply = await api('/admin/workspace/test-chat', {method: 'POST', body: JSON.stringify({state: testChat.state, context: testChat.context, value})});
+    testChat.state = reply.state; testChat.context = reply.context;
+    reply.replies.forEach(item => testChat.log.push({kind: 'bot', reply: item}));
+    if (reply.handed_over) { testChat.paused = true; testChat.log.push({kind: 'note', text: 'In Messenger, you’d take over from here and get an email.'}); }
+    if (!reply.catalog_fresh && !testChat.staleNoted) { testChat.staleNoted = true; testChat.log.push({kind: 'note', text: 'Your catalog hasn’t synced from the Sheet in over an hour, so TindaBot won’t show products. With live delivery on, it syncs every minute.'}); }
+  } catch (error) { testChat.log.push({kind: 'note', text: error.message}); }
+  finally { testChat.busy = false; renderChat(); $('#test-chat-input')?.focus(); }
+}
 function automationInsights(d) {
   const i = d.insights;
   if (!i) return '';
@@ -261,7 +305,7 @@ async function copyFaqRow(form) {
 }
 function automation() {
   const d = state.data, healthy = d.worker_age_seconds !== null && d.worker_age_seconds < 120;
-  return automationInsights(d) + handoverButton() + (d.insights ? '<h2 class="section-divider">Operator checks</h2>' : '') + automationBrief(d, healthy) + `<div class="automation-layout"><section class="panel automation-panel" aria-label="Automation settings"><div class="panel-head"><div><h2>Messenger assistant</h2><p>A helping hand, with you in control.</p></div>${icon('bot')}</div>
+  return automationInsights(d) + testChatPanel() + handoverButton() + (d.insights ? '<h2 class="section-divider">Operator checks</h2>' : '') + automationBrief(d, healthy) + `<div class="automation-layout"><section class="panel automation-panel" aria-label="Automation settings"><div class="panel-head"><div><h2>Messenger assistant</h2><p>A helping hand, with you in control.</p></div>${icon('bot')}</div>
     <div class="setting-row"><div><h3>Automated replies</h3><p>${d.automation_locked ? 'Disabled by server configuration. Ask your operator to enable automation.' : 'Let TindaBot guide customers from browsing to checkout.'}</p></div><button class="switch" role="switch" aria-label="Automated replies" aria-checked="${d.automation}" data-action="automation" ${d.automation_locked ? 'disabled' : ''}></button></div>
     <div class="setting-row"><div><h3>Delivery mode</h3><p>${d.delivery_mode === 'live' ? 'Messages can be sent to customers.' : 'Messages are recorded without being sent to customers.'}</p></div><span class="badge">${d.delivery_mode === 'live' ? 'Live' : 'Dry run'}</span></div>
     <div class="setting-row"><div><h3>Worker heartbeat</h3><p>${isDemo() ? 'Illustrative activity for this preview.' : d.worker_age_seconds === null ? 'No heartbeat received. Start the worker and refresh.' : `Last received ${Math.floor(d.worker_age_seconds)} seconds before this refresh.`}</p></div><span class="badge ${healthy ? 'badge-delivered' : 'badge-pending'}">${isDemo() ? 'Sample' : healthy ? 'Recent' : 'Check worker'}</span></div>
@@ -486,13 +530,15 @@ document.addEventListener('click', async event => {
   if (action === 'connect') return connectModal();
   if (action === 'guide') return guide();
   if (action === 'teach-faq') return teachFaq(Number(node.dataset.miss));
+  if (action === 'test-chat-say') return sayToBot(node.dataset.payload, node.textContent);
+  if (action === 'test-chat-reset') { resetTestChat(); renderChat(); $('#test-chat-input')?.focus(); return; }
   if (action === 'stock') return stockModal(node.dataset.sku);
   if (action === 'refresh') return refresh(true);
   if (action === 'more-orders') return loadMoreOrders();
   if (action === 'pending') return navigate('orders', 'pending');
   if (action === 'low-stock') return navigate('inventory', 'low');
   if (action === 'clear') { state.filter = 'all'; state.payment = 'all'; state.query = ''; $('#search').value = ''; return updateOrderView('#search'); }
-  if (action === 'disconnect') { state.request++; state.token = ''; state.loading = false; state.error = ''; state.query = ''; viewContexts.clear(); historyContexts.clear(); state.data = demoSnapshot(state.days, state.view === 'orders' ? state.scope : 'period'); shell(); toast('Disconnected. You’re back in the preview.'); return; }
+  if (action === 'disconnect') { resetTestChat(); state.request++; state.token = ''; state.loading = false; state.error = ''; state.query = ''; viewContexts.clear(); historyContexts.clear(); state.data = demoSnapshot(state.days, state.view === 'orders' ? state.scope : 'period'); shell(); toast('Disconnected. You’re back in the preview.'); return; }
   if (action === 'theme') {
     const theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'; document.documentElement.dataset.theme = theme;
     try { localStorage.setItem('tindabot-theme', theme); } catch { /* Theme still works without storage. */ }
@@ -539,6 +585,7 @@ document.addEventListener('submit', async event => {
   const form = event.target;
   if (['note-form', 'refund-form'].includes(form.id)) { event.preventDefault(); return saveOrderEntry(form); }
   if (form.id === 'faq-form') { event.preventDefault(); return copyFaqRow(form); }
+  if (form.id === 'test-chat-form') { event.preventDefault(); const input = $('#test-chat-input'), value = input.value; input.value = ''; return sayToBot(value); }
   if (!['connect-form', 'stock-form', 'automation-form'].includes(form.id)) return;
   event.preventDefault();
   const submit = $('button[type="submit"]', form), label = submit.textContent;
