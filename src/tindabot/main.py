@@ -14,7 +14,7 @@ from tindabot.catalog import CatalogImport, adjust_stock, import_catalog
 from tindabot.config import Settings
 from tindabot.db import Conversation, Database, Inbox, Outbox, Record, insert_once
 from tindabot.events import accept_events, valid_signature
-from tindabot.handover import set_pause
+from tindabot.handover import has_unread, set_pause
 from tindabot.orders import OrderConflict, apply_order_action, change_status
 from tindabot.recovery import revision
 
@@ -256,14 +256,7 @@ def create_app(settings=None, database=None):
                 raise HTTPException(404, "Conversation not found")
             # Version changes happen during processing, not durable intake. Do not
             # resume past customer activity that the operator has not seen yet.
-            if not command.enabled and session.scalar(
-                select(Inbox.id)
-                .where(
-                    Inbox.conversation_key == conversation.key,
-                    Inbox.status.in_(["pending", "failed"]),
-                )
-                .limit(1)
-            ):
+            if not command.enabled and has_unread(session, conversation.key):
                 raise HTTPException(409, "conversation_pending")
             if (
                 command.expected_version is not None

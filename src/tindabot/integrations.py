@@ -2,6 +2,7 @@ import base64
 import json
 import smtplib
 import ssl
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from email.message import EmailMessage
 
@@ -10,6 +11,7 @@ import httpx
 from google.oauth2.service_account import Credentials
 
 from tindabot.catalog import CatalogImport
+from tindabot.orders import MANILA
 
 
 class DeliveryError(Exception):
@@ -21,7 +23,7 @@ class DeliveryError(Exception):
 ORDER_HEADERS = [
     "order_id",
     "order_code",
-    "created_at",
+    "created_at_manila",
     "status",
     "payment_status",
     "version",
@@ -31,7 +33,7 @@ ORDER_HEADERS = [
     "delivery",
     "payment",
     "items",
-    "total_minor",
+    "total_php",
 ]
 COMMAND_HEADERS = ["command_id", "order_id", "expected_version", "action", "result"]
 
@@ -117,17 +119,17 @@ class Integrations:
 
     def export_order(self, order):
         worksheet = self.sheet().worksheet("Orders")
-        rows = worksheet.get_all_values()
-        if not rows or rows[0] != ORDER_HEADERS:
+        if worksheet.row_values(1) != ORDER_HEADERS:
             raise DeliveryError("sheet_headers")
-        matches = [i + 1 for i, row in enumerate(rows) if row and row[0] == order.id]
+        # Only the ID column: the whole sheet grows with every order ever placed.
+        matches = [i + 1 for i, value in enumerate(worksheet.col_values(1)) if value == order.id]
         if len(matches) > 1:
             raise DeliveryError("sheet_duplicate_order")
         d = order.details
         values = [
             order.id,
             order.code,
-            order.created_at,
+            datetime.fromtimestamp(order.created_at, MANILA).strftime("%Y-%m-%d %H:%M"),
             order.status,
             order.payment_status,
             order.version,
@@ -137,7 +139,7 @@ class Integrations:
             d.get("delivery", ""),
             d.get("payment", ""),
             "; ".join(f"{i['qty']} x {i['name']}" for i in order.items),
-            order.total_minor,
+            order.total_minor / 100,
         ]
         if matches:
             worksheet.update([values], f"A{matches[0]}:M{matches[0]}", value_input_option="RAW")

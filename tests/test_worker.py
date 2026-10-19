@@ -160,3 +160,28 @@ def test_draft_expires_even_when_paused_customer_keeps_messaging(db, settings):
         conversation = session.get(Conversation, "100:200")
         assert conversation.context == {}
         assert conversation.paused
+
+
+def test_retention_cleans_each_row_once_and_keeps_delivery_history(db, settings):
+    from sqlalchemy import event
+
+    send(db, settings, "hi")
+    assert dispatch_one(db, settings, Mock())
+    now = time.time() + settings.event_retention_days * 86400 + 90000
+    maintenance(db, settings, now)
+    with db.sessions() as session:
+        job = session.scalar(select(Outbox))
+        assert job.status == "dry_run" and job.payload == {}
+    updates = []
+
+    def count_updates(_conn, cursor, statement, *_):
+        if statement.lstrip().upper().startswith("UPDATE"):
+            updates.append(cursor.rowcount)
+
+    event.listen(db.engine, "after_cursor_execute", count_updates)
+    try:
+        maintenance(db, settings, now + 65)
+    finally:
+        event.remove(db.engine, "after_cursor_execute", count_updates)
+    # Only the once-a-minute maintenance marker changes on the second pass.
+    assert [n for n in updates if n] == [1]
