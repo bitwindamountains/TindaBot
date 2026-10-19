@@ -2,9 +2,9 @@ import time
 
 import pytest
 from conftest import checkout, send
-from sqlalchemy import select
+from sqlalchemy import func, select
 
-from tindabot.db import Inbox, Order, Outbox, Record
+from tindabot.db import Conversation, Inbox, Order, Outbox, Record
 
 AUTH = {"Authorization": "Bearer " + "a" * 40}
 
@@ -214,3 +214,32 @@ def test_insights_count_self_served_conversations_and_group_missed_questions(cli
             "last_at": insights["misses"][0]["last_at"],
         }
     ]
+
+
+def chat(client, value, state="IDLE", context=None, headers=AUTH):
+    body = {"state": state, "context": context or {}, "value": value}
+    return client.post("/admin/workspace/test-chat", json=body, headers=headers)
+
+
+def test_test_chat_walks_checkout_without_saving_or_pausing(client, db, settings):
+    reply = chat(client, "2 ube pandesal po").json()
+    assert reply["state"] == "CART" and reply["context"]["cart"] == {"UBE-01": 2}
+    state, context = reply["state"], reply["context"]
+    for value in ["CHECKOUT", "pickup", "Juan Dela Cruz", "09171234567", "cod po"]:
+        reply = chat(client, value, state, context).json()
+        state, context = reply["state"], reply["context"]
+    # The quote runs through the same code as live checkout.
+    assert state == "CONFIRMING" and context["quote"]["total_minor"] == 36000
+    reply = chat(client, f"CONFIRM:{context['checkout_id']}:{context['version']}", state, context)
+    assert "TEST-ORDER" in reply.json()["replies"][0]["text"]
+    assert chat(client, "pakausap sa seller").json()["handed_over"]
+    with db.sessions() as session:
+        assert session.scalar(select(func.count()).select_from(Order)) == 0
+        assert session.scalar(select(func.count()).select_from(Outbox)) == 0
+        assert session.scalar(select(func.count()).select_from(Conversation)) == 0
+
+
+def test_test_chat_requires_operator_and_rejects_forged_state(client):
+    assert chat(client, "hi", headers={"Authorization": "Bearer " + "b" * 40}).status_code == 401
+    assert chat(client, "1", "QTY", {"cart": "not-a-cart", "selected": "UBE-01"}).status_code == 422
+    assert chat(client, "hi", "UNKNOWN").status_code == 422
