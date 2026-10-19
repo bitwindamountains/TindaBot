@@ -277,3 +277,81 @@ def test_erased_customers_get_no_order_updates(db, settings):
         change_status(session, order.id, 1, "confirmed", "erased-confirm")
     with db.sessions() as session:
         assert not session.scalar(select(Outbox).where(Outbox.business_key.startswith("update:")))
+
+
+def test_order_updates_never_reach_a_customer_who_typed_stop(db, settings):
+    from tindabot.orders import change_status
+
+    order = confirm_order(db, settings)
+    send(db, settings, "STOP")
+    settings.delivery_mode = "live"
+    adapter = Mock()
+    adapter.send_message.return_value = "sent-mid"
+    drain(db, settings, adapter)
+    adapter.reset_mock()
+    with db.sessions.begin() as session:
+        session.add(Record(key="order-updates", value={"confirmed": True}))
+        change_status(session, order.id, 1, "confirmed", "after-stop")
+    drain(db, settings, adapter)
+    adapter.send_message.assert_not_called()
+    with db.sessions() as session:
+        job = session.scalar(select(Outbox).where(Outbox.business_key.startswith("update:")))
+        assert (job.status, job.error) == ("suppressed", "customer_stopped")
+
+
+def test_a_refused_order_update_does_not_block_later_replies(db, settings):
+    from tindabot.integrations import DeliveryError
+    from tindabot.orders import change_status
+
+    order = confirm_order(db, settings)
+    settings.delivery_mode = "live"
+    adapter = Mock()
+    adapter.send_message.return_value = "sent-mid"
+    drain(db, settings, adapter)
+    with db.sessions.begin() as session:
+        session.add(Record(key="order-updates", value={"confirmed": True}))
+        change_status(session, order.id, 1, "confirmed", "refused")
+    adapter.send_message.side_effect = DeliveryError("meta_rejected")
+    drain(db, settings, adapter)
+    adapter.send_message.side_effect = None
+    adapter.reset_mock()
+    send(db, settings, "hi")
+    drain(db, settings, adapter)
+    assert adapter.send_message.called
+    with db.sessions() as session:
+        job = session.scalar(select(Outbox).where(Outbox.business_key.startswith("update:")))
+        assert (job.status, job.error) == ("suppressed", "meta_rejected")
+
+
+def test_only_the_operator_token_can_add_a_customer_note(client, db, settings):
+    order = confirm_order(db, settings)
+    body = {"command_id": "n1", "order_id": order.id, "expected_version": 1}
+    body |= {"status": "confirmed", "note": "Pay to 0917 instead"}
+    status_token = {"Authorization": "Bearer " + "b" * 40}
+    assert client.post("/admin/order-status", json=body, headers=status_token).status_code == 403
+    admin = {"Authorization": "Bearer " + "a" * 40}
+    # Line breaks, C1 controls and bidi overrides could make a note read differently.
+    for sneaky in ("line\nbreak", "pay here", "‮gcash", "a\u0085b"):
+        body["note"] = sneaky
+        assert client.post("/admin/order-status", json=body, headers=admin).status_code == 422
+    body["note"] = "Thank you!"
+    assert client.post("/admin/order-status", json=body, headers=admin).status_code == 200
+
+
+def test_an_order_update_out_of_retries_does_not_block_later_replies(db, settings):
+    from tindabot.integrations import DeliveryError
+    from tindabot.orders import change_status
+
+    order = confirm_order(db, settings)
+    settings.delivery_mode, settings.max_attempts = "live", 1
+    adapter = Mock()
+    adapter.send_message.return_value = "sent-mid"
+    drain(db, settings, adapter)
+    with db.sessions.begin() as session:
+        session.add(Record(key="order-updates", value={"confirmed": True}))
+        change_status(session, order.id, 1, "confirmed", "throttled")
+    adapter.send_message.side_effect = DeliveryError("meta_throttled", retry=True)
+    drain(db, settings, adapter)
+    with db.sessions() as session:
+        job = session.scalar(select(Outbox).where(Outbox.business_key.startswith("update:")))
+        assert (job.status, job.error) == ("suppressed", "meta_throttled")

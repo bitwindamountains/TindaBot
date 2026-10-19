@@ -243,3 +243,29 @@ def test_test_chat_requires_operator_and_rejects_forged_state(client):
     assert chat(client, "hi", headers={"Authorization": "Bearer " + "b" * 40}).status_code == 401
     assert chat(client, "1", "QTY", {"cart": "not-a-cart", "selected": "UBE-01"}).status_code == 422
     assert chat(client, "hi", "UNKNOWN").status_code == 422
+
+
+def test_test_chat_rejects_forged_quotes_and_malformed_state(client):
+    forged = {
+        "quote": {"items": [{"qty": "x", "price_minor": 4_000_000_000, "name": "n"}]},
+        "cart": {"UBE-01": 1},
+        "checkout_id": "c",
+        "version": 1,
+        "delivery": "pickup",
+        "payment": "cod",
+        "name": "n",
+        "phone": "09171234567",
+    }
+    # The browser's quote is replaced by a server quote, so the forged one never multiplies.
+    reply = chat(client, "EDIT", "CONFIRMING", forged)
+    assert reply.status_code == 200 and reply.json()["state"] == "DELIVERY"
+    assert chat(client, "1", "QTY", {"cart": {"UBE-01": "x" * 50}}).status_code == 422
+    deep = '{"a": ' * 3000 + "{}" + "}" * 3000
+    for context in (deep, '{"x": NaN}'):
+        response = client.post(
+            "/admin/workspace/test-chat",
+            content='{"state": "IDLE", "value": "hi", "context": ' + context + "}",
+            headers={**AUTH, "Content-Type": "application/json"},
+        )
+        # A clean client error, never a 500 from the process that also takes webhooks.
+        assert 400 <= response.status_code < 500

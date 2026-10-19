@@ -21,7 +21,7 @@ from tindabot.db import Conversation, Inbox, Order, OrderActivity, Outbox, Produ
 from tindabot.handover import waiting
 from tindabot.machine import transition
 from tindabot.messages import ORDER_UPDATES, order_update
-from tindabot.orders import refund_total
+from tindabot.orders import quote, refund_total
 from tindabot.recovery import inspect_job
 from tindabot.service import apply_actions, view_for
 
@@ -179,14 +179,33 @@ def register_workspace(app, db, settings, operator):
     @app.post("/admin/workspace/test-chat", dependencies=[Depends(operator)])
     def test_chat(message: TestChatMessage):
         """Run the live conversation logic against the real catalog. Nothing is saved or sent."""
-        if len(json.dumps(message.context)) > 8000:
+        stale = HTTPException(422, "Test conversation is out of date; start over")
+        context = message.context
+        try:
+            size = len(json.dumps(context, allow_nan=False))
+        except (ValueError, RecursionError) as exc:
+            raise stale from exc
+        if size > 8000:
             raise HTTPException(422, "Test conversation is too long; start over")
+        cart = context.get("cart", {})
+        if (
+            not isinstance(cart, dict)
+            or len(cart) > 20
+            or not all(
+                isinstance(sku, str) and type(qty) is int and 1 <= qty <= 99
+                for sku, qty in cart.items()
+            )
+        ):
+            raise stale
         now = time.time()
         with db.sessions() as session:
             # The test conversation owns no orders, so tracking replies stay empty.
             view = view_for(session, SimpleNamespace(key="workspace-test-chat"), settings, now)
             try:
-                decision = transition(message.state, message.context, message.value, view)
+                if "quote" in context:
+                    # Derived data is recomputed here; a browser-sent quote is never trusted.
+                    context = {**context, "quote": quote(session, context, settings)}
+                decision = transition(message.state, context, message.value, view)
                 replies, _ = apply_actions(
                     session,
                     decision,
@@ -195,8 +214,15 @@ def register_workspace(app, db, settings, operator):
                     place_order=lambda ctx: (SimpleNamespace(code="TEST-ORDER"), False),
                     hand_over=lambda ctx: None,
                 )
-            except (KeyError, TypeError, ValueError, AttributeError) as exc:
-                raise HTTPException(422, "Test conversation is out of date; start over") from exc
+            except (
+                KeyError,
+                TypeError,
+                ValueError,
+                AttributeError,
+                RecursionError,
+                OverflowError,
+            ) as exc:
+                raise stale from exc
             finally:
                 session.rollback()
         return {

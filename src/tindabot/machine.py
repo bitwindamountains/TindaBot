@@ -16,24 +16,28 @@ class Transition:
 
 
 # Plain-language intents, checked only outside checkout so a name or address is never misread.
-INTENTS = (
-    ("SELLER", re.compile(r"\b(seller|admin|human|person|agent|tao|kausap|makausap)\b")),
-    ("TRACK", re.compile(r"\b(track\w*|status|nasaan|asan|san na|na ?ship\w*|shipped)\b")),
+# Handover needs an explicit request: "Human Nature oil" or "good for 2 person" must not pause a buyer.
+SELLER = re.compile(
+    r"\b(talk|speak|chat|usap|kausap|kausapin|makausap|pakausap|need|want)\b.*"
+    r"\b(seller|admin|human|person|agent|tao|owner)\b"
+    r"|\b(real|live) (person|human|agent)\b|\bmay tao ba\b"
+    r"|^(seller|admin|agent|human|tao)( po| please)?$"
 )
+TRACK = re.compile(r"\b(track\w*|status|nasaan|asan|san na|na ?ship\w*|shipped)\b")
 BUY = re.compile(r"\b(order\w*|pa ?order|bili|pabili|bibili|mine|kuha|kukuha|checkout)\b")
 GREETING = re.compile(r"^(hi|hello|hey|good (morning|afternoon|evening|day)|magandang \w+)\b")
 THANKS = re.compile(r"\b(thank\w*|salamat|ty|tysm)\b")
 NUMBER_WORDS = {
-    **dict.fromkeys(("isa", "one"), 1),
-    **dict.fromkeys(("dalawa", "two"), 2),
-    **dict.fromkeys(("tatlo", "three"), 3),
+    **dict.fromkeys(("isa", "isang", "one"), 1),
+    **dict.fromkeys(("dalawa", "dalawang", "two"), 2),
+    **dict.fromkeys(("tatlo", "tatlong", "three"), 3),
     **dict.fromkeys(("apat", "four"), 4),
-    **dict.fromkeys(("lima", "five"), 5),
+    **dict.fromkeys(("lima", "limang", "five"), 5),
     **dict.fromkeys(("anim", "six"), 6),
-    **dict.fromkeys(("pito", "seven"), 7),
-    **dict.fromkeys(("walo", "eight"), 8),
+    **dict.fromkeys(("pito", "pitong", "seven"), 7),
+    **dict.fromkeys(("walo", "walong", "eight"), 8),
     **dict.fromkeys(("siyam", "nine"), 9),
-    **dict.fromkeys(("sampu", "ten"), 10),
+    **dict.fromkeys(("sampu", "sampung", "ten"), 10),
 }
 CHECKOUT_STEPS = {"QTY", "DELIVERY", "NAME", "PHONE", "ADDRESS", "PAYMENT"}
 
@@ -43,18 +47,31 @@ def normalize(value):
 
 
 def quantity(value):
-    """First 1–2 digit number ("2 pcs", "2pcs po") or a number word ("dalawa")."""
-    match = re.search(r"(?<!\d)(\d{1,2})(?!\d)", value)
+    """A standalone count ("2", "2pcs", "x3") or one number word ("dalawa"); 0 when unsure.
+
+    Sizes such as "50ml" are not counts, and compound numbers ("labing-isa" = 11,
+    "sampu't lima" = 15) return 0 so the bot asks again instead of guessing low.
+    """
+    match = re.search(
+        r"(?<!\w)(?:x\s*)?(\d{1,2})(?:\s*(?:pcs?|pieces?|x))?(?!\w)", value.casefold()
+    )
     if match:
         return int(match.group(1))
-    return next((NUMBER_WORDS[w] for w in normalize(value).split() if w in NUMBER_WORDS), 0)
+    words = normalize(value).split()
+    found = [NUMBER_WORDS[w] for w in words if w in NUMBER_WORDS]
+    compound = any(
+        w.startswith("labi") or w.endswith(("pu", "pung"))
+        for w in words
+        if w not in {"sampu", "sampung"}
+    )
+    return found[0] if len(found) == 1 and not compound else 0
 
 
 def faq_answer(normalized, faqs):
     """The keyword ending latest wins ("magkano shipping" is about shipping); longer breaks ties."""
     best, score = None, (-1, -1)
     for faq in faqs:
-        for keyword in (k.strip().casefold() for k in faq["keywords"].split(",")):
+        for keyword in (normalize(k) for k in faq["keywords"].split(",")):
             match = keyword and re.search(r"(?<!\w)" + re.escape(keyword) + r"(?!\w)", normalized)
             if match and (match.end(), len(keyword)) > score:
                 best, score = faq["answer"], (match.end(), len(keyword))
@@ -243,24 +260,31 @@ def transition(state: str, context: dict, value: str, view: dict) -> Transition:
         normalized = normalize(raw)
         if command == "FAQ":
             topics = [
-                max((k.strip() for k in f["keywords"].split(",") if k.strip()), key=len)
+                max(keywords, key=len)
                 for f in view["faq"]
+                if (keywords := [k.strip() for k in f["keywords"].split(",") if k.strip()])
             ]
             if not topics:
                 return reply(COPY["no_faq"])
             return reply(COPY["faq_topics"], [(t.capitalize()[:20], t) for t in topics[:12]])
-        for intent, pattern in INTENTS:
-            if pattern.search(normalized):
-                return transition(state, ctx, intent, view)
+        if SELLER.search(normalized):
+            return transition(state, ctx, "SELLER", view)
+        # The seller's own FAQ wins over built-in shortcuts such as order tracking.
         answer = faq_answer(normalized, view["faq"])
         if answer:
             return reply(answer)
+        if TRACK.search(normalized):
+            return transition(state, ctx, "TRACK", view)
         sku = find_product(normalized, products)
         if sku:
-            qty = quantity(raw)
-            if qty:
-                return transition("QTY", {**ctx, "selected": sku}, str(qty), view)
-            return transition(state, ctx, f"PRODUCT:{sku}", view)
+            # Count only words outside the product name ("Aloe Lotion 50ml" is not 50 units),
+            # and go through PRODUCT: so its stock check still applies.
+            name = set(normalize(products[sku]["name"]).split())
+            qty = quantity(" ".join(w for w in normalized.split() if w not in name))
+            picked = transition(state, ctx, f"PRODUCT:{sku}", view)
+            if qty and picked.state == "QTY":
+                return transition("QTY", picked.context, str(qty), view)
+            return picked
         if BUY.search(normalized) and "cancel" not in normalized:
             return transition(state, ctx, "SHOP", view)
         if GREETING.search(normalized):

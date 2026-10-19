@@ -24,7 +24,11 @@ class StatusCommand(BaseModel):
     order_id: str = Field(max_length=36)
     expected_version: int = Field(ge=1)
     status: str = Field(pattern=r"^(pending|confirmed|paid|shipped|delivered|cancelled)$")
-    note: str = Field(default="", max_length=160)
+    note: str = Field(
+        default="",
+        max_length=160,
+        pattern=r"^[^\x00-\x1f\x7f-\x9f\u2028\u2029\u202a-\u202e\u2066-\u2069]*$",
+    )
 
 
 class StockCommand(BaseModel):
@@ -194,7 +198,9 @@ def create_app(settings=None, database=None):
             raise HTTPException(409, str(exc)) from exc
 
     @app.post("/admin/order-status", dependencies=[Depends(status_auth)])
-    def status(command: StatusCommand):
+    def status(command: StatusCommand, authorization: str = Header(default="")):
+        if command.note and not token_matches(authorization, settings.admin_token):
+            raise HTTPException(403, "Only the operator token can add a customer note")
         try:
             with db.sessions.begin() as session:
                 return change_status(
