@@ -1,10 +1,11 @@
 import logging
 import random
+import re
 import signal
 import time
 import uuid
 
-from sqlalchemy import exists, select, update
+from sqlalchemy import Text, cast, exists, select, update
 from sqlalchemy.orm import aliased
 
 from tindabot.catalog import import_catalog
@@ -20,6 +21,7 @@ from tindabot.db import (
     enqueue,
     insert_once,
 )
+from tindabot.handover import has_unread, set_pause
 from tindabot.integrations import DeliveryError, Integrations
 from tindabot.orders import OrderConflict, change_status, record_activity
 from tindabot.service import process_one
@@ -195,7 +197,11 @@ def maintenance(db, settings, now=None):
         for conversation in session.scalars(
             select(Conversation)
             .where(
-                (Conversation.updated_at < now - 86400)
+                # Already-reset conversations (IDLE, empty context) are skipped on later runs.
+                (
+                    (Conversation.updated_at < now - 86400)
+                    & ((Conversation.state != "IDLE") | (cast(Conversation.context, Text) != "{}"))
+                )
                 | (Conversation.context["draft_created_at"].as_float() < now - 86400)
             )
             .with_for_update(skip_locked=True)
@@ -217,14 +223,17 @@ def maintenance(db, settings, now=None):
             )
             record_activity(session, order, "retention", "system", now)
             enqueue(session, key=f"retention:{order.id}", destination="sheets", order=order.id)
-        # Keep idempotency metadata; remove raw personal text independently.
+        # Keep idempotency metadata; remove raw personal text independently. The
+        # retention marker keeps each scrub to one pass instead of every minute.
+        scrubbed = "retention_expired"
         session.execute(
             update(Inbox)
             .where(
                 Inbox.received_at < now - settings.event_retention_days * 86400,
                 Inbox.status == "done",
+                Inbox.error.is_distinct_from(scrubbed),
             )
-            .values(payload={})
+            .values(payload={}, error=scrubbed)
         )
         # Expired blocked work must not retain checkout PII forever. Preserve event/job
         # identifiers for audit and deduplication, but make expired work non-replayable.
@@ -234,24 +243,25 @@ def maintenance(db, settings, now=None):
                 Inbox.received_at < now - settings.event_retention_days * 86400,
                 Inbox.status.in_(["pending", "failed"]),
             )
-            .values(payload={}, status="expired", error="retention_expired")
+            .values(payload={}, status="expired", error=scrubbed)
         )
         session.execute(
             update(Outbox)
             .where(
                 Outbox.created_at < now - settings.event_retention_days * 86400,
                 Outbox.destination == "messenger",
-                Outbox.status != "processing",
+                Outbox.status.in_(["pending", "failed", "uncertain"]),
             )
-            .values(payload={}, status="suppressed", error="retention_expired")
+            .values(payload={}, status="suppressed", error=scrubbed)
         )
         session.execute(
             update(Outbox)
             .where(
                 Outbox.created_at < now - settings.event_retention_days * 86400,
                 Outbox.status.in_(["delivered", "dry_run", "suppressed"]),
+                Outbox.error.is_distinct_from(scrubbed),
             )
-            .values(payload={})
+            .values(payload={}, error=scrubbed)
         )
 
 
@@ -281,8 +291,6 @@ def sync_seller(db, settings, integrations, now=None):
         for row_number, row in integrations.commands():
             command_id, order_id, version, action, _ = row
             try:
-                import re
-
                 if not re.fullmatch(r"[A-Za-z0-9_-]{1,80}", command_id):
                     raise OrderConflict("invalid_command_id")
                 with db.sessions.begin() as session:
@@ -300,7 +308,9 @@ def sync_seller(db, settings, integrations, now=None):
                         if prior and prior.value != {"action": action, "order_id": order_id}:
                             raise OrderConflict("command_reused")
                         if not prior:
-                            conversation.paused = action == "pause"
+                            if action == "resume" and has_unread(session, conversation.key):
+                                raise OrderConflict("conversation_pending")
+                            set_pause(conversation, action == "pause", "operator", now)
                             session.add(
                                 Record(key=key, value={"action": action, "order_id": order_id})
                             )

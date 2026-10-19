@@ -49,7 +49,8 @@ def test_meta_error_classification(adapter, status, error, retry, uncertain):
 
 def test_sheet_reconciliation_uses_stable_order_id_and_raw_cells(adapter):
     worksheet = Mock()
-    worksheet.get_all_values.return_value = [ORDER_HEADERS, ["order-id"]]
+    worksheet.row_values.return_value = ORDER_HEADERS
+    worksheet.col_values.return_value = ["order_id", "order-id"]
     adapter._sheet = Mock()
     adapter._sheet.worksheet.return_value = worksheet
     order = SimpleNamespace(
@@ -66,12 +67,17 @@ def test_sheet_reconciliation_uses_stable_order_id_and_raw_cells(adapter):
     adapter.export_order(order)
     worksheet.append_row.assert_not_called()
     assert worksheet.update.call_args.kwargs["value_input_option"] == "RAW"
-    assert worksheet.update.call_args.args[0][0][6] == '=IMPORTXML("bad")'
+    row = worksheet.update.call_args.args[0][0]
+    assert row[6] == '=IMPORTXML("bad")'
+    # Sellers read Manila time and pesos, not epoch seconds and centavos.
+    assert row[2] == "1970-01-01 08:01" and row[12] == 1.0
+    worksheet.get_all_values.assert_not_called()
 
 
 def test_sheet_duplicate_rows_stop_export(adapter):
     worksheet = Mock()
-    worksheet.get_all_values.return_value = [ORDER_HEADERS, ["order-id"], ["order-id"]]
+    worksheet.row_values.return_value = ORDER_HEADERS
+    worksheet.col_values.return_value = ["order_id", "order-id", "order-id"]
     adapter._sheet = Mock()
     adapter._sheet.worksheet.return_value = worksheet
     with pytest.raises(DeliveryError, match="sheet_duplicate_order"):

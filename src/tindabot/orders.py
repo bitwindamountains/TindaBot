@@ -3,11 +3,14 @@ import json
 import secrets
 import time
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func, select
 
 from tindabot.db import Order, OrderActivity, Product, Record, enqueue, insert_once
+
+# The Philippines has no daylight saving; a fixed offset needs no tz database.
+MANILA = timezone(timedelta(hours=8), "Asia/Manila")
 
 
 class OrderConflict(ValueError):
@@ -62,7 +65,7 @@ def create_order(session, conversation, ctx, settings, now):
     # bounded event retry generates a fresh code without double-allocating stock.
     code = (
         "TB-"
-        + datetime.fromtimestamp(now, UTC).strftime("%y%m%d")
+        + datetime.fromtimestamp(now, MANILA).strftime("%y%m%d")
         + "-"
         + "".join(secrets.choice(alphabet) for _ in range(10))
     )

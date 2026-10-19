@@ -1,6 +1,8 @@
 """Small handover marker stored alongside the existing conversation state."""
 
-from tindabot.db import Conversation
+from sqlalchemy import select
+
+from tindabot.db import Conversation, Inbox
 
 
 def set_pause(conversation, paused, reason="operator", now=0):
@@ -17,6 +19,18 @@ def set_pause(conversation, paused, reason="operator", now=0):
     conversation.context = context
     conversation.paused = paused
     conversation.version += 1
+
+
+def has_unread(session, conversation_key):
+    """Customer activity the operator has not seen yet blocks a resume."""
+    return session.scalar(
+        select(Inbox.id)
+        .where(
+            Inbox.conversation_key == conversation_key,
+            Inbox.status.in_(["pending", "failed"]),
+        )
+        .limit(1)
+    )
 
 
 def waiting():

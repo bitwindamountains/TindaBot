@@ -4,11 +4,12 @@ import time
 from unittest.mock import Mock
 
 import pytest
-from conftest import send
+from conftest import envelope, send
 from sqlalchemy import select
 from test_orders import confirm_order
 
 from tindabot.db import Conversation, Inbox, Order, Outbox, Record
+from tindabot.events import accept_events
 from tindabot.logging_setup import SafeFormatter
 from tindabot.privacy import erase_customer
 from tindabot.worker import dispatch_one, sync_seller
@@ -190,3 +191,23 @@ def test_safe_log_formatter_excludes_exception_and_arguments():
     payload = SafeFormatter().format(record)
     assert "secret-value" not in payload
     assert json.loads(payload)["event"] == "httpx"
+
+
+def test_sheet_pause_and_resume_follow_handover_rules(db, settings):
+    order = confirm_order(db, settings)
+    settings.delivery_mode = "live"
+    adapter = Mock()
+    adapter.read_catalog.side_effect = RuntimeError("catalog not under test")
+    adapter.commands.return_value = [(2, ["sheet-pause", order.id, "", "pause", ""])]
+    now = time.time()
+    sync_seller(db, settings, adapter, now)
+    with db.sessions() as session:
+        conversation = session.get(Conversation, order.conversation_key)
+        # Visible in the workspace handover queue, like a workspace pause.
+        assert conversation.paused and conversation.context["handover"]["reason"] == "operator"
+    accept_events(db, settings, envelope("are you there?"))
+    adapter.commands.return_value = [(3, ["sheet-resume", order.id, "", "resume", ""])]
+    sync_seller(db, settings, adapter, now + 61)
+    assert adapter.command_result.call_args.args[-1] == "rejected:conversation_pending"
+    with db.sessions() as session:
+        assert session.get(Conversation, order.conversation_key).paused

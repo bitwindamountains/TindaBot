@@ -162,3 +162,17 @@ def test_invalid_phone_then_cancel(db, settings):
     send(db, settings, "CANCEL")
     with db.sessions() as session:
         assert session.get(Conversation, "100:200").context == {}
+
+
+def test_order_code_uses_the_manila_date(db, settings):
+    from datetime import datetime
+
+    from tindabot.orders import MANILA
+
+    token = checkout(db, settings)
+    # 23:30 UTC yesterday is 07:30 today in Manila: the two calendars disagree.
+    early_morning = (time.time() // 86400) * 86400 - 1800
+    send(db, settings, token, now=early_morning)
+    with db.sessions() as session:
+        code = session.scalar(select(Order)).code
+    assert code.startswith("TB-" + datetime.fromtimestamp(early_morning, MANILA).strftime("%y%m%d"))
