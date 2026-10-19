@@ -85,11 +85,17 @@ def dispatch_one(db, settings, integrations, now=None):
                 enabled = settings.automation_enabled and (
                     not control or control.value.get("enabled", True)
                 )
+                update = job.payload.get("order_update", False)
+                outside = not conversation or now - conversation.last_customer_at >= 86400
+                # Outside Meta's 24-hour window only tagged order updates may be sent.
+                tag = "POST_PURCHASE_UPDATE" if update and outside else None
                 expired = (
                     not conversation
-                    or now - conversation.last_customer_at >= 86400
+                    or (outside and not (update and settings.order_update_tag))
                     or now - job.payload.get("event_at", 0) >= 86400
                 )
+                if expired and update and conversation:
+                    error = "outside_24h"
                 superseded = (
                     conversation
                     and conversation.version
@@ -117,7 +123,12 @@ def dispatch_one(db, settings, integrations, now=None):
                 elif settings.delivery_mode == "dry_run":
                     outcome = "dry_run"
                 else:
-                    outbound_action = ("messenger", conversation.psid, job.payload["message"])
+                    outbound_action = (
+                        "messenger",
+                        conversation.psid,
+                        job.payload["message"],
+                        tag,
+                    )
             elif settings.delivery_mode == "dry_run":
                 outcome = "dry_run"
             elif job.destination == "sheets" and order:

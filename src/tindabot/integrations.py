@@ -60,14 +60,22 @@ class Integrations:
             self._sheet = client.open_by_key(self.settings.google_sheet_id)
         return self._sheet
 
-    def send_message(self, psid, message):
+    def send_message(self, psid, message, tag=None):
         try:
             response = self.http.post(
                 f"https://graph.facebook.com/{self.settings.meta_graph_version}/{self.settings.meta_page_id}/messages",
                 headers={
                     "Authorization": f"Bearer {self.settings.meta_page_access_token.get_secret_value()}"
                 },
-                json={"recipient": {"id": psid}, "messaging_type": "RESPONSE", "message": message},
+                json={
+                    "recipient": {"id": psid},
+                    "message": message,
+                    **(
+                        {"messaging_type": "MESSAGE_TAG", "tag": tag}
+                        if tag
+                        else {"messaging_type": "RESPONSE"}
+                    ),
+                },
             )
         except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
             raise DeliveryError("meta_connect", retry=True) from exc

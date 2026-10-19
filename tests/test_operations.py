@@ -211,3 +211,69 @@ def test_sheet_pause_and_resume_follow_handover_rules(db, settings):
     assert adapter.command_result.call_args.args[-1] == "rejected:conversation_pending"
     with db.sessions() as session:
         assert session.get(Conversation, order.conversation_key).paused
+
+
+def drain(db, settings, adapter):
+    while dispatch_one(db, settings, adapter):
+        pass
+
+
+def test_order_updates_are_opt_in_and_carry_the_tracking_note(client, db, settings):
+    order = confirm_order(db, settings)
+    headers = {"Authorization": "Bearer " + "a" * 40}
+    status = {"order_id": order.id, "expected_version": 1, "status": "confirmed"}
+    client.post("/admin/order-status", json={**status, "command_id": "c1"}, headers=headers)
+    with db.sessions() as session:
+        assert not session.scalar(select(Outbox).where(Outbox.business_key.startswith("update:")))
+    switch = {"event": "shipped", "enabled": True}
+    assert client.post("/admin/order-updates", json=switch, headers=headers).json() == {
+        "shipped": True
+    }
+    shipped = {**status, "expected_version": 2, "status": "shipped", "note": "J&T 1234"}
+    client.post("/admin/order-status", json={**shipped, "command_id": "c2"}, headers=headers)
+    with db.sessions() as session:
+        job = session.scalar(select(Outbox).where(Outbox.business_key == f"update:{order.id}:3"))
+    assert job.payload["message"]["text"] == f"Your order {order.code} is on its way!\nJ&T 1234"
+    settings.delivery_mode = "live"
+    adapter = Mock()
+    adapter.send_message.return_value = "sent-mid"
+    drain(db, settings, adapter)
+    # Inside the 24-hour window: an ordinary reply, no tag.
+    assert adapter.send_message.call_args.args[1:] == (job.payload["message"], None)
+
+
+def test_order_updates_outside_24h_need_the_tag_setting(db, settings):
+    from tindabot.orders import change_status
+
+    order = confirm_order(db, settings)
+    settings.delivery_mode = "live"
+    adapter = Mock()
+    adapter.send_message.return_value = "sent-mid"
+    drain(db, settings, adapter)
+    adapter.reset_mock()
+    with db.sessions.begin() as session:
+        session.add(Record(key="order-updates", value={"confirmed": True, "shipped": True}))
+        session.get(Conversation, order.conversation_key).last_customer_at = time.time() - 90000
+        change_status(session, order.id, 1, "confirmed", "late-confirm")
+    drain(db, settings, adapter)
+    adapter.send_message.assert_not_called()
+    with db.sessions() as session:
+        job = session.scalar(select(Outbox).where(Outbox.business_key.startswith("update:")))
+        assert (job.status, job.error) == ("suppressed", "outside_24h")
+    settings.order_update_tag = True
+    with db.sessions.begin() as session:
+        change_status(session, order.id, 2, "shipped", "late-ship")
+    drain(db, settings, adapter)
+    assert adapter.send_message.call_args.args[-1] == "POST_PURCHASE_UPDATE"
+
+
+def test_erased_customers_get_no_order_updates(db, settings):
+    from tindabot.orders import change_status
+
+    order = confirm_order(db, settings)
+    with db.sessions.begin() as session:
+        session.add(Record(key="order-updates", value={"confirmed": True}))
+        session.get(Order, order.id).anonymized = True
+        change_status(session, order.id, 1, "confirmed", "erased-confirm")
+    with db.sessions() as session:
+        assert not session.scalar(select(Outbox).where(Outbox.business_key.startswith("update:")))

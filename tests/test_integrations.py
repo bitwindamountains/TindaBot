@@ -1,3 +1,4 @@
+import json
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -84,3 +85,15 @@ def test_sheet_duplicate_rows_stop_export(adapter):
         adapter.export_order(SimpleNamespace(id="order-id"))
     worksheet.append_row.assert_not_called()
     worksheet.update.assert_not_called()
+
+
+@respx.mock
+def test_tagged_order_update_uses_message_tag(adapter):
+    route = respx.post("https://graph.facebook.com/v99.0/100/messages").mock(
+        return_value=httpx.Response(200, json={"message_id": "mid"})
+    )
+    adapter.send_message("200", {"text": "update"}, "POST_PURCHASE_UPDATE")
+    adapter.send_message("200", {"text": "reply"})
+    tagged, plain = (json.loads(call.request.content) for call in route.calls)
+    assert tagged["messaging_type"] == "MESSAGE_TAG" and tagged["tag"] == "POST_PURCHASE_UPDATE"
+    assert plain["messaging_type"] == "RESPONSE" and "tag" not in plain

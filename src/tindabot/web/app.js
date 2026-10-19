@@ -1,7 +1,7 @@
 import {icon} from './icons.js';
 import {deliveryReview} from './recovery.js';
 import {handoverQueue, sampleHandovers} from './handover.js';
-import {demoSnapshot, demoOrder, demoStatus, demoStock, demoAutomation, demoNote, demoRefund} from './demo.js';
+import {demoSnapshot, demoOrder, demoStatus, demoStock, demoAutomation, demoOrderUpdate, demoNote, demoRefund} from './demo.js';
 import {heroBackdrop, observeScenes, toggleAmbient} from './motion.js';
 
 const $ = (s, root = document) => root.querySelector(s);
@@ -55,8 +55,9 @@ const initials = (name) => name.split(/\s+/).filter(Boolean).slice(0, 2).map(n =
 
 function statusToast(code, status) {
   const name = isDemo() ? `Sample order ${code}` : code;
-  if (status === 'confirmed' && !state.data.summary.pending) return `${name} confirmed. You’re all caught up.`;
-  return {confirmed: `${name} confirmed.`, shipped: `${name} is on its way.`, delivered: `${name} delivered. One more promise kept.`, paid: `Payment recorded for ${name}.`, cancelled: `${name} cancelled. Its stock is back on the shelf.`}[status] || `${name} updated.`;
+  const queued = state.data.order_updates?.[status] ? ' Update queued for the customer.' : '';
+  if (status === 'confirmed' && !state.data.summary.pending) return `${name} confirmed.${queued} You’re all caught up.`;
+  return ({confirmed: `${name} confirmed.`, shipped: `${name} is on its way.`, delivered: `${name} delivered. One more promise kept.`, paid: `Payment recorded for ${name}.`, cancelled: `${name} cancelled. Its stock is back on the shelf.`}[status] || `${name} updated.`) + queued;
 }
 function toast(message) {
   clearTimeout(toastTimer);
@@ -274,6 +275,13 @@ async function sayToBot(value, label = value) {
   } catch (error) { testChat.log.push({kind: 'note', text: error.message}); }
   finally { testChat.busy = false; renderChat(); $('#test-chat-input')?.focus(); }
 }
+const updateLabels = {confirmed: 'Order confirmed', shipped: 'Shipped or ready for pickup', delivered: 'Delivered', paid: 'Payment received'};
+function orderUpdatesPanel(d) {
+  if (!d.order_updates) return '';
+  const rows = Object.entries(d.order_updates).map(([event, on]) => `<div class="setting-row"><div><h3>${updateLabels[event]}</h3><p class="update-preview">“${escape(d.order_update_examples?.[event] || '')}”</p></div><button class="switch" role="switch" aria-label="Message customers: ${updateLabels[event]}" aria-checked="${on}" data-action="order-update" data-event="${event}"></button></div>`).join('');
+  const window = d.order_update_tag ? 'Customers who last messaged over 24 hours ago get them as Meta post-purchase updates.' : 'Customers who last messaged over 24 hours ago are skipped until your operator turns on Meta’s post-purchase tag.';
+  return `<section class="panel order-updates" aria-labelledby="updates-title"><div class="panel-head"><div><h2 id="updates-title">Order updates</h2><p>Message customers when you move their order forward.</p></div>${icon('bag')}</div>${rows}<div class="setting-row"><p>${window} Pausing automated replies pauses updates too.${d.delivery_mode === 'live' ? '' : ' In dry run, updates are recorded, not sent.'}</p></div></section>`;
+}
 function automationInsights(d) {
   const i = d.insights;
   if (!i) return '';
@@ -305,7 +313,7 @@ async function copyFaqRow(form) {
 }
 function automation() {
   const d = state.data, healthy = d.worker_age_seconds !== null && d.worker_age_seconds < 120;
-  return automationInsights(d) + testChatPanel() + handoverButton() + (d.insights ? '<h2 class="section-divider">Operator checks</h2>' : '') + automationBrief(d, healthy) + `<div class="automation-layout"><section class="panel automation-panel" aria-label="Automation settings"><div class="panel-head"><div><h2>Messenger assistant</h2><p>A helping hand, with you in control.</p></div>${icon('bot')}</div>
+  return automationInsights(d) + testChatPanel() + orderUpdatesPanel(d) + handoverButton() + (d.insights ? '<h2 class="section-divider">Operator checks</h2>' : '') + automationBrief(d, healthy) + `<div class="automation-layout"><section class="panel automation-panel" aria-label="Automation settings"><div class="panel-head"><div><h2>Messenger assistant</h2><p>A helping hand, with you in control.</p></div>${icon('bot')}</div>
     <div class="setting-row"><div><h3>Automated replies</h3><p>${d.automation_locked ? 'Disabled by server configuration. Ask your operator to enable automation.' : 'Let TindaBot guide customers from browsing to checkout.'}</p></div><button class="switch" role="switch" aria-label="Automated replies" aria-checked="${d.automation}" data-action="automation" ${d.automation_locked ? 'disabled' : ''}></button></div>
     <div class="setting-row"><div><h3>Delivery mode</h3><p>${d.delivery_mode === 'live' ? 'Messages can be sent to customers.' : 'Messages are recorded without being sent to customers.'}</p></div><span class="badge">${d.delivery_mode === 'live' ? 'Live' : 'Dry run'}</span></div>
     <div class="setting-row"><div><h3>Worker heartbeat</h3><p>${isDemo() ? 'Illustrative activity for this preview.' : d.worker_age_seconds === null ? 'No heartbeat received. Start the worker and refresh.' : `Last received ${Math.floor(d.worker_age_seconds)} seconds before this refresh.`}</p></div><span class="badge ${healthy ? 'badge-delivered' : 'badge-pending'}">${isDemo() ? 'Sample' : healthy ? 'Recent' : 'Check worker'}</span></div>
@@ -465,7 +473,7 @@ async function showOrder(id) {
     openModal(escape(order.code), `${browse}<div class="order-summary"><span class="eyebrow">Order total</span><strong class="numeric">${money(order.total_minor)}</strong><span>Placed ${Number.isFinite(order.created_at) ? date(order.created_at, {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'}) : 'date unavailable'} · Manila time</span></div>${journey}<div class="detail-section">${badge(order.status)} <span class="badge">${escape(order.details.payment?.toUpperCase() || 'Payment')} · ${escape(order.payment_status.replaceAll('_', ' '))}</span>${isDemo() ? '<p class="field-help">Sample order · edits only affect this preview.</p>' : ''}</div>
       <div class="detail-section"><h3>Customer</h3><p><strong>${escape(order.details.name || 'Customer')}</strong></p><p class="muted">${escape(order.details.phone)}</p><p class="muted">${escape(order.details.address || 'Pickup order')}</p></div>
       <div class="detail-section"><h3>Order items</h3>${order.items.map(i => `<div class="detail-line"><span>${escape(i.name)} <span class="muted">× ${i.qty}</span></span><strong class="numeric">${money(i.price_minor * i.qty)}</strong></div>`).join('')}<div class="detail-line muted"><span>Delivery</span><span class="numeric">${money(order.shipping_minor)}</span></div><div class="detail-line detail-total"><strong>Total</strong><strong class="numeric">${money(order.total_minor)}</strong></div></div>
-      <div class="detail-section"><h3>Next steps</h3><p class="muted">${order.status === 'cancelled' ? order.payment_status === 'refund_required' ? 'Arrange the refund with your customer outside TindaBot.' : 'This order is cancelled and stock has been released.' : order.status === 'delivered' ? 'This order has reached its customer.' : !canAdvance ? 'Verify payment before marking this order as shipped.' : 'Update the order when you’re ready. Stock and payment checks apply.'}</p><div class="detail-actions">${next ? `<button class="button button-primary" data-action="order-status" data-status="${next[0]}" ${!canAdvance ? 'disabled' : ''}>${next[1]}</button>` : ''}${order.payment_status === 'unpaid' && order.status !== 'cancelled' ? button('Verify payment…', 'verify-paid', 'check') : ''}${['pending', 'confirmed'].includes(order.status) ? '<button class="button button-quiet button-danger" data-action="verify-cancel">Cancel order…</button>' : ''}</div><p id="form-error" class="error-message" role="alert"></p></div>${orderJournal(order)}`, true);
+      <div class="detail-section"><h3>Next steps</h3><p class="muted">${order.status === 'cancelled' ? order.payment_status === 'refund_required' ? 'Arrange the refund with your customer outside TindaBot.' : 'This order is cancelled and stock has been released.' : order.status === 'delivered' ? 'This order has reached its customer.' : !canAdvance ? 'Verify payment before marking this order as shipped.' : 'Update the order when you’re ready. Stock and payment checks apply.'}</p><div class="detail-actions">${next ? `<button class="button button-primary" data-action="${next[0] === 'shipped' && state.data.order_updates?.shipped ? 'verify-ship' : 'order-status'}" data-status="${next[0]}" ${!canAdvance ? 'disabled' : ''}>${next[1]}</button>` : ''}${order.payment_status === 'unpaid' && order.status !== 'cancelled' ? button('Verify payment…', 'verify-paid', 'check') : ''}${['pending', 'confirmed'].includes(order.status) ? '<button class="button button-quiet button-danger" data-action="verify-cancel">Cancel order…</button>' : ''}</div><p id="form-error" class="error-message" role="alert"></p></div>${orderJournal(order)}`, true);
     dialog.dataset.orderId = id; dialog.dataset.version = order.version;
     delete dialog.dataset.commandId; delete dialog.dataset.commandStatus;
   } catch (error) { if (dialog.open && version === modalVersion) openModal('Order unavailable', `<p class="error-message" role="alert">${escape(error.message)}</p>${button('Close', 'close')}`, true); }
@@ -530,6 +538,22 @@ document.addEventListener('click', async event => {
   if (action === 'connect') return connectModal();
   if (action === 'guide') return guide();
   if (action === 'teach-faq') return teachFaq(Number(node.dataset.miss));
+  if (action === 'order-update') {
+    const event = node.dataset.event, enabled = node.getAttribute('aria-checked') !== 'true';
+    node.disabled = true;
+    try {
+      if (isDemo()) demoOrderUpdate(event, enabled); else await api('/admin/order-updates', {method: 'POST', body: JSON.stringify({event, enabled})});
+      state.data.order_updates[event] = enabled; node.setAttribute('aria-checked', String(enabled)); invalidateSnapshots();
+      toast(`${updateLabels[event]} updates ${enabled ? 'on' : 'off'}.`);
+    } catch (error) { toast(error.message); }
+    finally { node.disabled = false; }
+    return;
+  }
+  if (action === 'verify-ship') {
+    const section = node.closest('.detail-section');
+    section.innerHTML = `<h3>Mark as shipped?</h3><p class="muted">Your customer gets an order update.</p><label for="ship-note">Note for the customer (optional)</label><input class="field" id="ship-note" maxlength="160" placeholder="e.g. J&amp;T tracking 1234"><div class="detail-actions"><button class="button button-primary" data-action="order-status" data-status="shipped">Yes, mark as shipped</button><button class="button" data-order="${escape(dialog.dataset.orderId)}">Go back</button></div><p id="form-error" class="error-message" role="alert"></p>`;
+    $('#ship-note', section).focus(); return;
+  }
   if (action === 'test-chat-say') return sayToBot(node.dataset.payload, node.textContent);
   if (action === 'test-chat-reset') { resetTestChat(); renderChat(); $('#test-chat-input')?.focus(); return; }
   if (action === 'stock') return stockModal(node.dataset.sku);
@@ -570,7 +594,7 @@ document.addEventListener('click', async event => {
     const label = node.textContent; node.textContent = 'Saving…'; busy(true);
     try {
       if (isDemo()) demoStatus(id, status);
-      else await api('/admin/order-status', {method: 'POST', body: JSON.stringify({command_id: dialog.dataset.commandId, order_id: id, expected_version: Number(dialog.dataset.version), status})});
+      else await api('/admin/order-status', {method: 'POST', body: JSON.stringify({command_id: dialog.dataset.commandId, order_id: id, expected_version: Number(dialog.dataset.version), status, note: $('#ship-note', dialog)?.value.trim() || ''})});
       const code = detailOrder?.code || 'Order';
       busy(false); dialog.close(); invalidateSnapshots(); await refresh(); toast(statusToast(code, status));
     } catch (error) { $('#form-error', dialog).textContent = error.message; }

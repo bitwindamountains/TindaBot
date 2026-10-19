@@ -526,3 +526,7 @@ tbody tr:hover td:first-child { box-shadow: inset 3px 0 var(--accent); }
   .chat-log { height: 20rem; }
   .chat-chip { min-height: var(--control-height); }
 }
+
+/* Order updates: each switch shows the exact message the customer receives. */
+.order-updates { margin-bottom: var(--space-5); }
+.update-preview { font-family: var(--font-editorial); color: var(--text-secondary); }

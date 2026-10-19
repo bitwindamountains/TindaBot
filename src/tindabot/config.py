@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     status_token: SecretStr = SecretStr("")
     delivery_mode: Literal["dry_run", "live"] = "dry_run"
     automation_enabled: bool = True
+    # Enable only after confirming Meta still allows POST_PURCHASE_UPDATE for order status.
+    order_update_tag: bool = False
     production_acknowledged: bool = False
     google_sheet_id: str = ""
     google_service_account_json_b64: SecretStr = SecretStr("")
