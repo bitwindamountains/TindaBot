@@ -10,6 +10,10 @@ button:active:not(:disabled) { transform: scale(.97); }
 button:disabled { opacity: .5; cursor: not-allowed; }
 a { color: var(--accent); text-underline-offset: var(--space-1); }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+/* Main is a programmatic focus target after navigation, not a control. */
+#main:focus { outline: none; }
+::selection { background: var(--accent-soft); color: var(--text-primary); }
+:root { scrollbar-color: var(--border-strong) transparent; }
 h1, h2, h3, p { margin: 0; }
 h1, h2, h3 { line-height: var(--leading-heading); font-weight: var(--weight-semibold); }
 h1 { font-size: var(--text-2xl); letter-spacing: var(--tracking-heading); }
@@ -212,7 +216,7 @@ dialog.drawer[open] { animation-name: drawer-enter; }
   .metric-value { font-size: var(--text-2xl); } .main-grid { gap: var(--space-4); margin-bottom: var(--space-6); }
   .panel-head { padding: var(--space-5); } .chart { padding-inline: var(--space-4); height: 13rem; } .chart-footer { padding-inline: var(--space-5); }
   .attention { padding-inline: var(--space-5); display: block; } .attention-icon, .attention-row > .icon { display: grid; } .attention-row { align-items: center; } .attention-row + .attention-row { border-top: 1px solid var(--border-subtle); }
-  .table-toolbar { align-items: flex-start; flex-direction: column; padding-inline: var(--space-3); } .filters { max-width: 100%; width: 100%; } .table-footer { padding-inline: var(--space-4); gap: var(--space-4); } .table-footer span:last-child { display: none; }
+  .table-toolbar { align-items: flex-start; flex-direction: column; padding-inline: var(--space-3); } .filters { max-width: 100%; width: 100%; padding-inline-end: var(--space-8); mask-image: linear-gradient(to right, #000 calc(100% - var(--space-8)), transparent); scrollbar-width: none; } .table-footer { padding-inline: var(--space-4); gap: var(--space-4); } .table-footer span:last-child { display: none; }
   .inventory-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); } .product { padding: var(--space-4); } .product-top { flex-direction: column; } .product-bottom { align-items: flex-start; flex-direction: column; } .product h2 { font-size: var(--text-sm); }
   .setting-row { padding: var(--space-5); } .page-footer { flex-direction: column; } .panel-head .legend { display: none; }
 }

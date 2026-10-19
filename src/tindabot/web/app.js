@@ -162,11 +162,11 @@ function overview() {
     <button class="attention-row" data-action="pending"><span class="attention-icon numeric">01</span><span><span class="attention-title">${d.summary.pending} orders to confirm</span><small>Give your customers a happy update</small></span>${icon('chevron')}</button>
     <button class="attention-row" data-action="low-stock"><span class="attention-icon numeric">02</span><span><span class="attention-title">${low} products running low</span><small>A good time to check your shelves</small></span>${icon('chevron')}</button>
     <button class="attention-row" data-view="automation"><span class="attention-icon numeric">03</span><span><span class="attention-title">${d.failures ? `${d.failures} jobs need a look` : 'Your automation, at a glance'}</span><small>${d.automation ? 'Replies are enabled' : 'Replies are paused'}</small></span>${icon('chevron')}</button>
-    ${handoverButton()}</div><div class="bot-foot">${icon('shield')}<span>${isDemo() ? 'Sample activity · explore with confidence' : d.worker_age_seconds !== null && d.worker_age_seconds < 120 ? 'Worker heartbeat received recently' : 'Worker heartbeat needs attention'}</span></div></section></div>${orderTable(true)}`;
+    ${handoverButton('04')}</div><div class="bot-foot">${icon('shield')}<span>${isDemo() ? 'Sample activity · explore with confidence' : d.worker_age_seconds !== null && d.worker_age_seconds < 120 ? 'Worker heartbeat received recently' : 'Worker heartbeat needs attention'}</span></div></section></div>${orderTable(true)}`;
 }
-function handoverButton() {
+function handoverButton(marker) {
   const count = isDemo() ? sampleHandovers.length : state.data.handover_count || 0;
-  return `<button class="attention-row" data-action="handovers"><span class="attention-icon numeric">${count}</span><span><span class="attention-title">Customers needing help</span><small>${count} tracked handovers · review paused conversations</small></span>${icon('chevron')}</button>`;
+  return `<button class="attention-row" data-action="handovers"><span class="attention-icon numeric">${marker ?? count}</span><span><span class="attention-title">Customers needing help</span><small>${count} tracked handovers · review paused conversations</small></span>${icon('chevron')}</button>`;
 }
 function orderPipeline() {
   const stages = [['pending', 'To confirm', 'clock'], ['confirmed', 'To prepare', 'box'], ['shipped', 'On the way', 'arrow'], ['delivered', 'Delivered', 'check']];
