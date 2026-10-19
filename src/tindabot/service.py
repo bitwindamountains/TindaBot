@@ -148,9 +148,13 @@ def process_one(db, settings, now=None, before_commit=None):
                     ):
                         conversation.state, conversation.context = "IDLE", {}
                     view = view_for(session, conversation, settings, now)
+                    misses = conversation.context.get("misses", 0)
                     decision = transition(
                         conversation.state, conversation.context, payload.get("value", ""), view
                     )
+                    if decision.context.get("misses", 0) > misses:
+                        # Lives in the inbound payload, so retention and erasure remove it too.
+                        event.payload = {**payload, "missed": True}
                     replies = decision.replies
                     ctx = decision.context
                     for action in decision.actions:

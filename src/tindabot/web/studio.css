@@ -474,3 +474,27 @@ tbody tr:hover td:first-child { box-shadow: inset 3px 0 var(--accent); }
 @keyframes count-roll { from { transform: translateY(var(--roll-from)); opacity: 0; color: var(--accent); } 55% { color: var(--accent); } }
 @keyframes count-tint { from { color: var(--accent); } }
 @media (prefers-reduced-motion: reduce) { .count-down, .count-up { animation: count-tint 700ms ease-out !important; } }
+
+/* Teaching loop: how the bot did today, then what it could not answer. */
+.automation-insights { margin-bottom: var(--space-5); }
+.insights-head { padding: var(--space-6) var(--space-6) var(--space-5); border-bottom: 1px solid var(--border-subtle); }
+.insights-head h2 { font-family: var(--font-editorial); font-weight: var(--weight-regular); font-size: var(--text-2xl); letter-spacing: var(--tracking-heading); max-width: 34rem; text-wrap: balance; }
+.insights-head h2 em { font-style: normal; color: var(--accent); white-space: nowrap; }
+.insights-head p { color: var(--text-muted); margin-top: var(--space-2); }
+.insights-body { padding: var(--space-5) var(--space-6) var(--space-3); }
+.insights-body h3 { font-size: var(--text-sm); font-weight: var(--weight-semibold); }
+.miss-list { list-style: none; margin: var(--space-3) 0 0; padding: 0; }
+.miss-list li { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding-block: var(--space-4); border-top: 1px solid var(--border-subtle); }
+.miss-text { font-family: var(--font-editorial); font-size: var(--text-lg); overflow-wrap: anywhere; }
+.miss-meta { display: block; margin-top: var(--space-1); color: var(--text-muted); font-size: var(--text-xs); }
+.miss-list .button { flex-shrink: 0; }
+.miss-empty { color: var(--text-muted); padding-block: var(--space-3) var(--space-4); }
+.section-divider { display: flex; align-items: center; gap: var(--space-3); margin: var(--space-8) 0 var(--space-4); color: var(--text-muted); font-size: var(--text-label); font-weight: var(--weight-semibold); letter-spacing: var(--tracking-label); text-transform: uppercase; }
+.section-divider::after { content: ""; flex: 1; height: 1px; background: var(--border-subtle); }
+#faq-form textarea { width: 100%; min-height: 6rem; resize: vertical; font: inherit; line-height: 1.5; }
+#faq-form .field-help { margin-bottom: var(--space-4); }
+@media (max-width: 760px) {
+  .insights-head, .insights-body { padding-inline: var(--space-4); }
+  .insights-head h2 { font-size: var(--text-xl); }
+  .miss-list li { flex-direction: column; align-items: stretch; gap: var(--space-3); }
+}

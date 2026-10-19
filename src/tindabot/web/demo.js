@@ -23,6 +23,13 @@ const orders = Array.from({length: 86}, (_, i) => {
     items: [{sku: p.sku, name: p.name, price_minor: p.price_minor, qty}]};
 });
 let automation = true;
+const hour = 3600;
+const insights = {conversations: 52, self_served: 44, needed_you: 8, missed_week: 23, misses: [
+  {text: 'May size small pa po?', keywords: 'may size small pa po', count: 9, last_at: now - 2 * hour},
+  {text: 'Ilang days bago dumating sa Cebu?', keywords: 'ilang days bago dumating sa cebu', count: 6, last_at: now - 5 * hour},
+  {text: 'Open po kayo Sunday?', keywords: 'open po kayo sunday', count: 5, last_at: now - 26 * hour},
+  {text: 'Pwede pa-reserve muna?', keywords: 'pwede pa reserve muna', count: 3, last_at: now - 50 * hour},
+]};
 let activityId = 1;
 for (const order of orders) {
   order.refunded_minor = 0;
@@ -35,7 +42,7 @@ function demoActivity(order, kind, fields = {}) {
 export function demoSnapshot(days, scope = 'period') {
   const start = today - (days - 1) * 86400;
   const recent = orders.filter(o => o.created_at >= start);
-  return {shop_name: 'Sari Studio', generated_at: now, days,
+  return {shop_name: 'Sari Studio', generated_at: now, days, insights, sheet_url: null,
     summary: {order_value: recent.filter(o => o.status !== 'cancelled').reduce((a, o) => a + o.total_minor, 0), orders: recent.length, pending: orders.filter(o => o.status === 'pending').length, products: products.filter(p => p.active).length},
     series: Array.from({length: days}, (_, i) => ({timestamp: start + i * 86400, value: recent.filter(o => o.status !== 'cancelled' && o.created_at >= start + i * 86400 && o.created_at < start + (i + 1) * 86400).reduce((a, o) => a + o.total_minor, 0)})),
     orders: scope === 'period' ? recent : scope === 'open' ? orders.filter(o => ['pending', 'confirmed', 'shipped'].includes(o.status) || o.payment_status === 'refund_required' || (o.payment_status === 'unpaid' && o.status !== 'cancelled')) : orders, products, automation, automation_locked: false, delivery_mode: 'dry_run', worker_age_seconds: 8, failures: 0, job_health: {inbox_failed: 0, delivery_failed: 0,delivery_uncertain: 0}, queue: 0};
