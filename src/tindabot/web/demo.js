@@ -43,7 +43,7 @@ export function demoSnapshot(days, scope = 'period') {
   const start = today - (days - 1) * 86400;
   const recent = orders.filter(o => o.created_at >= start);
   return {shop_name: 'Sari Studio', generated_at: now, days, insights, sheet_url: null,
-    order_updates: {...orderUpdates}, order_update_tag: false,
+    order_updates: {...orderUpdates},
     order_update_examples: {confirmed: 'Your order TB-1048 is confirmed. We’ll message you when it’s on its way.', shipped: 'Your order TB-1048 is on its way!', delivered: 'Your order TB-1048 was marked delivered. Salamat!', paid: 'We received your payment for order TB-1048. Salamat!'},
     summary: {order_value: recent.filter(o => o.status !== 'cancelled').reduce((a, o) => a + o.total_minor, 0), orders: recent.length, pending: orders.filter(o => o.status === 'pending').length, products: products.filter(p => p.active).length},
     series: Array.from({length: days}, (_, i) => ({timestamp: start + i * 86400, value: recent.filter(o => o.status !== 'cancelled' && o.created_at >= start + i * 86400 && o.created_at < start + (i + 1) * 86400).reduce((a, o) => a + o.total_minor, 0)})),

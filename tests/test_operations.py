@@ -238,11 +238,11 @@ def test_order_updates_are_opt_in_and_carry_the_tracking_note(client, db, settin
     adapter = Mock()
     adapter.send_message.return_value = "sent-mid"
     drain(db, settings, adapter)
-    # Inside the 24-hour window: an ordinary reply, no tag.
-    assert adapter.send_message.call_args.args[1:] == (job.payload["message"], None)
+    # Inside the 24-hour window, sent as a proactive update.
+    assert adapter.send_message.call_args.args[1:] == (job.payload["message"], "UPDATE")
 
 
-def test_order_updates_outside_24h_need_the_tag_setting(db, settings):
+def test_order_updates_are_never_sent_outside_24h(db, settings):
     from tindabot.orders import change_status
 
     order = confirm_order(db, settings)
@@ -260,11 +260,12 @@ def test_order_updates_outside_24h_need_the_tag_setting(db, settings):
     with db.sessions() as session:
         job = session.scalar(select(Outbox).where(Outbox.business_key.startswith("update:")))
         assert (job.status, job.error) == ("suppressed", "outside_24h")
-    settings.order_update_tag = True
+    # One second inside the window, the next update goes out.
     with db.sessions.begin() as session:
-        change_status(session, order.id, 2, "shipped", "late-ship")
+        session.get(Conversation, order.conversation_key).last_customer_at = time.time() - 86399
+        change_status(session, order.id, 2, "shipped", "in-window-ship")
     drain(db, settings, adapter)
-    assert adapter.send_message.call_args.args[-1] == "POST_PURCHASE_UPDATE"
+    assert adapter.send_message.call_args.args[-1] == "UPDATE"
 
 
 def test_erased_customers_get_no_order_updates(db, settings):

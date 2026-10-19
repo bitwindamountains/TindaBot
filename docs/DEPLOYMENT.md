@@ -50,7 +50,7 @@ Run `uv run tindabot doctor` to check the configured environment. It reports mis
 
 ## Staging and promotion
 
-1. Push the reviewed revision to the existing repository and require successful CI for that exact commit. The successful run on `334152c` predates the current changes. Record the revision and release artifact hashes. Local build output is in `dist/`.
+1. Push the reviewed revision to the existing repository and require successful CI for that exact commit. [CI run 39211902992](https://github.com/bitwindamountains/TindaBot/actions/runs/39211902992) passed on `5949d71`; any later commit needs its own successful run. Record the revision and release artifact hashes. Local build output is in `dist/`.
 2. Configure an isolated staging database and test provider accounts. Keep real customer traffic disconnected. For a credentials-free infrastructure smoke test use development mode with dry-run delivery; this is not production acceptance.
 3. Deploy the API and run one coordinated `alembic upgrade head` pre-deploy step. Verify `/healthz`, `/readyz`, `/`, and the workspace assets over HTTPS.
 4. Deploy one compatible worker. Verify `/admin/health`, queue delay, and the worker heartbeat. Keep API and worker on the same revision/configuration. The worker waits without updating its heartbeat or processing jobs until the database reports the required schema, then resumes automatically.
@@ -67,6 +67,7 @@ Run `uv run tindabot doctor` to check the configured environment. It reports mis
 - Private notes, activity history and external refund reconciliation require migration `0003`. Promote matching API/worker builds and use a `0003`-compatible rollback target; older builds that require exactly `0002` fail readiness. Keep the refund ledger in backups and do not downgrade away recorded refunds. See [rollout details](ORDER_JOURNAL.md).
 - A failed stock request can have an uncertain network outcome. Retry within the same dialog to reuse the adjustment ID. Before closing and making a new adjustment, refresh and reconcile the actual stock.
 - Existing APIs and the seller Sheet remain available for larger catalogs and older records. There is no browser product-import flow, customer messaging composer, or payment processor.
+- Customer order updates are off until the seller switches each one on in Automation. They are sent only within Messenger's 24-hour window and pause with automated replies. The test chat needs the operator token and a catalog synced within the last hour; it never writes or sends.
 
 ## Remaining external evidence
 

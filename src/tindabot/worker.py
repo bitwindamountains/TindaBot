@@ -86,15 +86,10 @@ def dispatch_one(db, settings, integrations, now=None):
                     not control or control.value.get("enabled", True)
                 )
                 is_update = job.payload.get("order_update", False)
+                # Meta retired the post-purchase tag, so nothing is sent outside 24 hours.
                 outside = not conversation or now - conversation.last_customer_at >= 86400
-                # Outside Meta's 24-hour window only tagged order updates may be sent.
-                tag = "POST_PURCHASE_UPDATE" if is_update and outside else None
-                expired = (
-                    not conversation
-                    or (outside and not (is_update and settings.order_update_tag))
-                    or now - job.payload.get("event_at", 0) >= 86400
-                )
-                if expired and is_update and conversation:
+                expired = outside or now - job.payload.get("event_at", 0) >= 86400
+                if is_update and conversation and outside:
                     error = "outside_24h"
                 superseded = (
                     conversation
@@ -137,7 +132,8 @@ def dispatch_one(db, settings, integrations, now=None):
                         "messenger",
                         conversation.psid,
                         job.payload["message"],
-                        tag,
+                        # An order update is proactive, not a reply to the customer's message.
+                        "UPDATE" if is_update else "RESPONSE",
                     )
             elif settings.delivery_mode == "dry_run":
                 outcome = "dry_run"

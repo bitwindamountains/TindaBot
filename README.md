@@ -13,6 +13,8 @@ A Messenger ordering service for one Facebook Page: product browsing, Taglish FA
 - Sheet catalog import, order projection using raw cell values, an explicit Commands tab for seller status changes, and seller email containing minimal customer data.
 - Operator credentials distinct from status credentials, global automation switch, human takeover, privacy field erasure, retention, health checks, migrations, CI, and backup tooling.
 - Responsive seller workspace at `/`: light/dark themes, order overview and detail, status changes, private order notes/history, external-refund tracking, stock adjustments, CSV export, and automation controls. The public shell shows labeled sample data until an operator connects.
+- Deterministic plain-language understanding, no AI: buying, tracking and handover phrases in English and Taglish, product names with quantities ("2 ube pandesal po"), typed checkout answers ("2 pcs", "pickup", "gcash"), and questions mid-checkout, which are answered and the step repeated.
+- Automation page: today's self-serve rate, questions the bot could not answer with a paste-ready **Add to FAQ** row, a **Talk to your bot** test chat that runs the live conversation logic without saving or sending anything, and opt-in order updates to customers (confirmed, shipped or ready for pickup, delivered, payment received).
 
 No customer messages or emails are sent in the default `dry_run` mode. Dry-run jobs are recorded as `dry_run`, never as delivered. They are not automatically replayed when switching to live mode.
 
@@ -109,7 +111,7 @@ The first [local load report](docs/validation/local-load.json) records 6,000 eve
 |---|---|---|
 | Products | `sku,name,price,stock,active,image_url` | `price` is PHP with up to two decimal places. `stock` initializes **new SKUs only**. Refreshing an existing SKU never replenishes sold stock. |
 | FAQ | `keywords,answer` | Comma-separated whole words/phrases; ordered deterministic matching, no free-form AI. |
-| Orders | None | Worker-owned projection, protected against manual changes. DB remains authoritative. |
+| Orders | None | Worker-owned projection, protected against manual changes. DB remains authoritative. `created_at_manila` shows Manila time and `total_php` shows pesos. Older tabs with `created_at`/`total_minor` headers are renamed automatically on the next export; rows written before that keep their raw values. |
 | Commands | `command_id,order_id,expected_version,action` | Append a unique command ID; copy order ID/version from Orders; use `confirmed`, `paid`, `shipped`, `delivered`, `cancelled`, `pause`, or `resume`. Worker writes `result`. |
 
 Commands are reconciled every minute. Reusing a command ID cannot apply another order transition. Incorrect versions or invalid transitions are rejected visibly. Use a **new command ID** after correcting a rejected command. Do not edit an accepted command row.
@@ -140,4 +142,5 @@ Follow the [deployment handoff](docs/DEPLOYMENT.md), [operations runbook](docs/O
 - Sheets have no uniqueness constraint or transactional editing contract. Exports are serialized and reconcile by order ID; duplicate rows stop delivery for review. A single production worker is the supported initial deployment. A Sheets operation extending beyond its lease requires reconciliation; multi-worker outbound scaling is not yet release-qualified.
 - A reply already in flight when a seller pauses cannot be recalled. New replies are checked immediately before dispatch.
 - Personal-field erasure removes controlled name/phone/address/message copies and queues Sheet cleanup. Restricted PSID/order association metadata remains for accounting and suppression. This is not complete identity unlinking or deletion from Meta, seller email, or historical backups.
-- Payment screenshots, proactive status messages, full identity unlinking, multi-Page service, AI answers, and courier integrations are not implemented.
+- Order updates are opt-in and sent only within Messenger's 24-hour window after the customer's last message; older conversations are skipped because Meta retired the post-purchase message tag. Updates never reach a customer who sent STOP or whose data was erased.
+- Payment screenshots, broadcast or marketing messages, full identity unlinking, multi-Page service, AI answers, and courier integrations are not implemented.
