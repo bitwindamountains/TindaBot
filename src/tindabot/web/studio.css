@@ -233,7 +233,9 @@ tbody tr:hover td:first-child { box-shadow: inset 3px 0 var(--accent); }
 .page-heading-overview .actions .icon-button { border: 1px solid var(--border-strong); border-radius: .5rem; background: var(--glass); }
 .metric-strip { margin-top: 1.25rem; margin-bottom: 1.5rem; border-radius: .875rem; }
 .metric { padding: 1.25rem 1.5rem; }
-.metric-value { font-size: 2.25rem; margin: .625rem 0 .375rem; }
+/* Sized to its own cell so long peso totals never break across lines. */
+.metric { container-type: inline-size; }
+.metric-value { font-size: min(2.25rem, 24cqi); white-space: nowrap; margin: .625rem 0 .375rem; }
 .metric-note { max-width: none; font-size: var(--text-xs); }
 .main-grid { grid-template-columns: minmax(0, 1.65fr) minmax(18rem, 1fr); gap: 1.25rem; margin-bottom: 1.75rem; }
 .chart-top { padding-bottom: .75rem; }
@@ -346,7 +348,7 @@ tbody tr:hover td:first-child { box-shadow: inset 3px 0 var(--accent); }
   .hero-actions .button { flex: 0 1 auto; padding-inline: .875rem; }
   .page-heading-overview > .actions { grid-row: 3; }
   .metric { padding: 1rem; } .metric-label { min-height: 2rem; font-size: var(--text-xs); }
-  .metric-value { font-size: 1.875rem; margin-block: .5rem; }
+  .metric-value { font-size: min(1.875rem, 24cqi); margin-block: .5rem; }
   .metric-note { font-size: var(--text-xs); }
   .focus-panel .panel-head h2 { font-size: 1.75rem; }
   .section-heading h2 { font-size: 1.375rem; }
@@ -429,7 +431,7 @@ tbody tr:hover td:first-child { box-shadow: inset 3px 0 var(--accent); }
 .health-totals > div { display: grid; min-width: 4rem; gap: .25rem; }
 .health-totals strong { color: var(--highlight); font-size: 2.25rem; font-weight: 500; letter-spacing: -.04em; }
 .health-totals span { color: var(--ink-muted); font-size: .75rem; }
-.needs-attention { border-left: 4px solid var(--warning); }
+.needs-attention { border-color: var(--warning); }
 .automation-layout { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(17rem, 1fr); gap: 1.25rem; align-items: start; }
 .automation-checklist .panel-head { padding-bottom: 1rem; }
 .automation-checklist .eyebrow { display: block; font-size: var(--text-label); margin-bottom: .75rem; }
