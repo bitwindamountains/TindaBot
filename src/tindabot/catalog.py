@@ -28,6 +28,13 @@ class FAQ(BaseModel):
     keywords: str = Field(min_length=1, max_length=500)
     answer: str = Field(min_length=1, max_length=1800)
 
+    @field_validator("keywords")
+    @classmethod
+    def has_a_keyword(cls, value):
+        if not any(k.strip() for k in value.split(",")):
+            raise ValueError("FAQ rows need at least one keyword")
+        return value
+
 
 class CatalogImport(BaseModel):
     products: list[CatalogProduct] = Field(max_length=1000)

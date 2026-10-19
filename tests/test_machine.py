@@ -119,3 +119,76 @@ def test_intents_never_hijack_checkout_answers():
     result, _ = say("Juan Seller", "NAME")
     assert result.state == "PHONE" and result.context["name"] == "Juan Seller"
     assert not result.actions
+
+
+SHOP = {
+    **VIEW,
+    "products": [
+        *VIEW["products"],
+        {
+            "sku": "L50",
+            "name": "Aloe Lotion 50ml",
+            "price_minor": 100,
+            "stock": 80,
+            "image_url": "",
+        },
+        {"sku": "JAM", "name": "Mango Jam", "price_minor": 100, "stock": 0, "image_url": ""},
+    ],
+}
+
+
+@pytest.mark.parametrize(
+    "message", ["pabili po ng Human Nature oil", "good for 2 person ba", "ilang tao kasya?"]
+)
+def test_words_like_person_or_brand_names_do_not_hand_over_a_buyer(message):
+    assert not transition("IDLE", {}, message, SHOP).actions
+
+
+def test_sizes_in_product_names_are_not_quantities():
+    result = transition("IDLE", {}, "aloe lotion 50ml", SHOP)
+    assert result.state == "QTY" and result.context["selected"] == "L50"
+    assert "cart" not in result.context or not result.context["cart"]
+
+
+def test_a_quantity_for_an_out_of_stock_product_does_not_strand_the_customer():
+    result = transition("IDLE", {}, "2 mango jam", SHOP)
+    assert (
+        result.state == "IDLE"
+        and " ".join(r["text"] for r in result.replies) == COPY["unavailable"]
+    )
+
+
+@pytest.mark.parametrize("typed", ["labing-isa", "sampu't lima", "dalawampu"])
+def test_compound_tagalog_numbers_are_asked_again_not_guessed_low(typed):
+    result = transition("QTY", {"selected": "UBE-01", "cart": {}}, typed, VIEW)
+    assert result.state == "QTY" and result.context["cart"] == {}
+
+
+def test_linker_number_words_count():
+    result = transition("IDLE", {}, "isang ube pandesal po", VIEW)
+    assert result.state == "CART" and result.context["cart"] == {"UBE-01": 1}
+
+
+def test_faq_rows_without_keywords_never_crash_the_topic_list():
+    view = {**VIEW, "faq": [{"keywords": " , ", "answer": "x"}, *VIEW["faq"]]}
+    result = transition("IDLE", {}, "FAQ", view)
+    assert len(result.replies[-1]["quick_replies"]) == len(VIEW["faq"])
+
+
+def test_catalog_import_rejects_faq_rows_without_keywords():
+    from pydantic import ValidationError
+
+    from tindabot.catalog import FAQ
+
+    with pytest.raises(ValidationError):
+        FAQ(keywords=",", answer="x")
+
+
+def test_a_seller_faq_about_orders_beats_the_tracking_shortcut():
+    view = {**VIEW, "faq": [{"keywords": "order status", "answer": "We ship in 2 days."}]}
+    assert transition("IDLE", {}, "order status?", view).replies[0]["text"] == "We ship in 2 days."
+
+
+@pytest.mark.parametrize("message", ["gusto ko kausapin seller", "need agent", "seller po"])
+def test_common_ways_to_ask_for_the_seller_still_hand_over(message):
+    assert transition("IDLE", {}, message, VIEW).actions == ["pause"]

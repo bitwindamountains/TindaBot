@@ -85,16 +85,16 @@ def dispatch_one(db, settings, integrations, now=None):
                 enabled = settings.automation_enabled and (
                     not control or control.value.get("enabled", True)
                 )
-                update = job.payload.get("order_update", False)
+                is_update = job.payload.get("order_update", False)
                 outside = not conversation or now - conversation.last_customer_at >= 86400
                 # Outside Meta's 24-hour window only tagged order updates may be sent.
-                tag = "POST_PURCHASE_UPDATE" if update and outside else None
+                tag = "POST_PURCHASE_UPDATE" if is_update and outside else None
                 expired = (
                     not conversation
-                    or (outside and not (update and settings.order_update_tag))
+                    or (outside and not (is_update and settings.order_update_tag))
                     or now - job.payload.get("event_at", 0) >= 86400
                 )
-                if expired and update and conversation:
+                if expired and is_update and conversation:
                     error = "outside_24h"
                 superseded = (
                     conversation
@@ -102,10 +102,20 @@ def dispatch_one(db, settings, integrations, now=None):
                     > job.payload.get("conversation_version", conversation.version)
                     and not job.payload.get("receipt")
                 )
+                # An update is the seller's action, but a customer's STOP is their opt-out.
+                stopped = (
+                    is_update
+                    and conversation
+                    and conversation.paused
+                    and conversation.context.get("handover", {}).get("reason") == "stop"
+                )
+                if stopped:
+                    error = "customer_stopped"
                 if (
                     expired
                     or superseded
                     or not enabled
+                    or stopped
                     or (conversation.paused and not job.payload.get("allow_paused"))
                 ):
                     outcome = "suppressed"
@@ -160,6 +170,9 @@ def dispatch_one(db, settings, integrations, now=None):
             return True
         if outcome == "pending" and current.attempts >= settings.max_attempts and error:
             outcome = "failed"
+        # A refused or exhausted order update must not hold later replies to this customer.
+        if outcome == "failed" and job.payload.get("order_update"):
+            outcome = "suppressed"
         current.status, current.error = outcome, error
         current.next_attempt = now + min(300, 2 ** min(current.attempts, 8)) + random.random()
         current.lease_until = 0
