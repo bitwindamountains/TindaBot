@@ -5,7 +5,7 @@ services:
     runtime: python
     region: singapore
     plan: 0.5c-512mb
-    buildCommand: pip install uv==0.12.21 && uv sync --frozen --no-dev
+    buildCommand: pip install uv==0.13.4 && uv sync --frozen --no-dev
     preDeployCommand: uv run --no-sync alembic upgrade head
     startCommand: uv run --no-sync uvicorn tindabot.main:create_app --factory --host 0.0.0.0 --port $PORT --no-access-log
     healthCheckPath: /readyz
@@ -17,7 +17,7 @@ services:
     runtime: python
     region: singapore
     plan: 0.5c-512mb
-    buildCommand: pip install uv==0.12.21 && uv sync --frozen --no-dev
+    buildCommand: pip install uv==0.13.4 && uv sync --frozen --no-dev
     startCommand: uv run --no-sync tindabot worker
     autoDeployTrigger: "off"
     envVars:
