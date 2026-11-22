@@ -176,7 +176,6 @@ def register_workspace(app, db, settings, operator):
         name="workspace-assets",
     )
 
-    @app.post("/admin/workspace/test-chat", dependencies=[Depends(operator)])
     def test_chat(message: TestChatMessage):
         """Run the live conversation logic against the real catalog. Nothing is saved or sent."""
         stale = HTTPException(422, "Test conversation is out of date; start over")
@@ -232,6 +231,15 @@ def register_workspace(app, db, settings, operator):
             "handed_over": "pause" in decision.actions,
             "catalog_fresh": view["catalog_fresh"],
         }
+
+    app.post("/admin/workspace/test-chat", dependencies=[Depends(operator)])(test_chat)
+    if settings.demo_mode:
+        # Same read-only handler; config forbids demo mode with production or live delivery.
+        app.post("/demo/test-chat")(test_chat)
+
+    @app.get("/demo", include_in_schema=False)
+    def demo():
+        return {"enabled": settings.demo_mode}
 
     @app.get("/", include_in_schema=False)
     def workspace():

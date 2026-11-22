@@ -17,7 +17,7 @@ const date = (timestamp, options = {month: 'short', day: 'numeric'}) => {
   return dateFormats.get(key).format(timestamp * 1000);
 };
 const labels = {overview: 'Overview', orders: 'Orders', inventory: 'Inventory', automation: 'Automation'};
-const state = {view: 'overview', days: 7, filter: 'all', query: '', token: '', data: null, loading: false, error: '', request: 0, chartDay: null, sort: 'newest', payment: 'all', stockSort: 'name', scope: 'all', paging: false};
+const state = {view: 'overview', days: 7, filter: 'all', query: '', token: '', data: null, loading: false, error: '', request: 0, chartDay: null, sort: 'newest', payment: 'all', stockSort: 'name', scope: 'all', paging: false, publicChat: false};
 const viewContexts = new Map(), historyContexts = new Map();
 let historyKey = crypto.randomUUID(), searchTimer;
 const contextKeys = ['view', 'filter', 'query', 'payment', 'sort', 'stockSort', 'scope', 'days'];
@@ -243,12 +243,13 @@ function chatReply(reply) {
   return `<div class="chat-bubble chat-bot">${escape(reply.text || '').replaceAll('\n', '<br>')}</div>${chatChoices(reply.quick_replies)}`;
 }
 function chatLog() {
-  if (!testChat.log.length) return '<p class="chat-empty">Try a message your customers send, like <em>hm po?</em> or <em>pa order po</em>.</p>';
+  if (!testChat.log.length) return '<p class="chat-empty">Try a message your customers send, like <em>hm po?</em> or <em>' + (isDemo() ? '2 canvas tote po' : 'pa order po') + '</em>.</p>';
   return testChat.log.map(entry => entry.kind === 'customer' ? `<div class="chat-bubble chat-customer">${escape(entry.text)}</div>` : entry.kind === 'note' ? `<p class="chat-note">${escape(entry.text)}</p>` : chatReply(entry.reply)).join('');
 }
 function testChatPanel() {
-  const head = `<div class="test-chat-head"><div><h2 id="test-chat-title">Talk to your bot</h2><p>Type what a customer would. TindaBot answers with your real catalog and FAQ. Nothing is sent or saved.</p></div>${isDemo() ? '' : button('Start over', 'test-chat-reset')}</div>`;
-  if (isDemo()) return `<section class="panel test-chat" aria-labelledby="test-chat-title">${head}<div class="chat-locked"><p>The test chat uses your real catalog and FAQ, so it works once your shop is connected.</p>${button('Connect to test', 'connect')}</div></section>`;
+  const locked = isDemo() && !state.publicChat;
+  const head = `<div class="test-chat-head"><div><h2 id="test-chat-title">Talk to your bot</h2><p>Type what a customer would. TindaBot answers with ${isDemo() ? 'the sample shop’s' : 'your real'} catalog and FAQ. Nothing is sent or saved.</p></div>${locked ? '' : button('Start over', 'test-chat-reset')}</div>`;
+  if (locked) return `<section class="panel test-chat" aria-labelledby="test-chat-title">${head}<div class="chat-locked"><p>The test chat uses your real catalog and FAQ, so it works once your shop is connected.</p>${button('Connect to test', 'connect')}</div></section>`;
   return `<section class="panel test-chat" aria-labelledby="test-chat-title">${head}<div class="chat-log" id="chat-log" role="log" aria-label="Test conversation">${chatLog()}</div><form id="test-chat-form" class="chat-compose"><label class="sr-only" for="test-chat-input">Message as a customer</label><input class="field" id="test-chat-input" autocomplete="off" maxlength="2000" placeholder="Message as a customer…"><button class="button button-primary" type="submit">Send</button></form></section>`;
 }
 function renderChat() {
@@ -267,7 +268,7 @@ async function sayToBot(value, label = value) {
   }
   testChat.busy = true; testChat.paused = false; renderChat();
   try {
-    const reply = await api('/admin/workspace/test-chat', {method: 'POST', body: JSON.stringify({state: testChat.state, context: testChat.context, value})});
+    const reply = await api(isDemo() ? '/demo/test-chat' : '/admin/workspace/test-chat', {method: 'POST', body: JSON.stringify({state: testChat.state, context: testChat.context, value})});
     testChat.state = reply.state; testChat.context = reply.context;
     reply.replies.forEach(item => testChat.log.push({kind: 'bot', reply: item}));
     if (reply.handed_over) { testChat.paused = true; testChat.log.push({kind: 'note', text: 'In Messenger, you’d take over from here and get an email.'}); }
@@ -621,7 +622,7 @@ document.addEventListener('submit', async event => {
       submit.textContent = 'Connecting…';
       state.filter = 'all'; state.payment = 'all'; state.query = '';
       const data = await api(workspacePath(), {}, token);
-      invalidateSnapshots(); viewContexts.clear(); historyContexts.clear(); state.request++; state.token = token; state.data = data; state.error = ''; state.loading = false; state.query = ''; state.filter = 'all'; state.payment = 'all'; state.loadedPath = workspacePath();
+      resetTestChat(); invalidateSnapshots(); viewContexts.clear(); historyContexts.clear(); state.request++; state.token = token; state.data = data; state.error = ''; state.loading = false; state.query = ''; state.filter = 'all'; state.payment = 'all'; state.loadedPath = workspacePath();
       busy(false); dialog.close(); shell(); toast('Your shop is connected.');
     } else if (form.id === 'stock-form') {
       if (isDemo()) demoStock(form.dataset.sku, delta);
@@ -702,3 +703,5 @@ state.data = demoSnapshot(state.days, state.view === 'orders' ? state.scope : 'p
 history.replaceState({workspaceKey: historyKey}, '', `#${state.view}`);
 shell();
 saveContext();
+// Public demo servers expose a read-only test chat against the sample catalog.
+fetch('/demo', {cache: 'no-store'}).then(response => response.json()).then(({enabled}) => { if (enabled) { state.publicChat = true; if (isDemo() && state.view === 'automation') renderPage(); } }).catch(() => {});

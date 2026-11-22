@@ -1,12 +1,18 @@
 # Progress
 
-Last updated: 19 October 2026 · Latest commit: `68433de` · CI: [run 39212795675](https://github.com/bitwindamountains/TindaBot/actions/runs/39212795675) passed
+Last updated: 23 November 2026 · Latest commit: `68433de` · CI: [run 39212795675](https://github.com/bitwindamountains/TindaBot/actions/runs/39212795675) passed
 
 ## Status
 
 **Code: ready for staging.** Not yet deployed. Production also needs real provider accounts, a hosted rehearsal, privacy sign-off and a supervised pilot (see "Next steps").
 
 Validation at `68433de`: 158 Python tests pass locally (19 PostgreSQL tests run in CI only), 35 Playwright browser tests pass, `pip-audit` and `npm audit` report no vulnerabilities, the Render Blueprint validates, and the schema remains `0003`.
+
+## Done in the 23 November 2026 session
+
+Pre-deployment review: lint/format clean, 161 Python tests pass (19 PostgreSQL tests CI-only), 36 Playwright tests pass. A scripted end-to-end run (signed webhook → worker → dry-run outbox) confirmed FAQ, typed cart and checkout, order and stock allocation, tracking, opt-in shipped update with note, STOP handover, and auth/signature rejection.
+
+Added a deployable public demo: `DEMO_MODE` (refused with production or live delivery), public read-only `POST /demo/test-chat` sharing the operator test chat, showcase catalog matching the browser preview, and `render.demo.yaml` (one free web service, SQLite, no secrets). See `docs/DEPLOYMENT.md` → "Public demo".
 
 ## Done in the 19 October 2026 session
 

@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     status_token: SecretStr = SecretStr("")
     delivery_mode: Literal["dry_run", "live"] = "dry_run"
     automation_enabled: bool = True
+    # Public read-only showcase: unauthenticated test chat, nothing sent or saved.
+    demo_mode: bool = False
     production_acknowledged: bool = False
     google_sheet_id: str = ""
     google_service_account_json_b64: SecretStr = SecretStr("")
@@ -58,6 +60,8 @@ class Settings(BaseSettings):
             raise ValueError("GCASH_INSTRUCTIONS is required")
         if "bank" in self.payments and not self.bank_instructions:
             raise ValueError("BANK_INSTRUCTIONS is required")
+        if self.demo_mode and (self.app_env == "production" or self.delivery_mode == "live"):
+            raise ValueError("DEMO_MODE requires a non-production app and dry-run delivery")
         if self.app_env == "production":
             url = make_url(self.database_url.get_secret_value())
             if url.drivername != "postgresql+psycopg" or url.query.get("sslmode") not in {

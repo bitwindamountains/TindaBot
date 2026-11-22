@@ -59,6 +59,17 @@ Run `uv run tindabot doctor` to check the configured environment. It reports mis
 7. Exercise backup/restore, monitoring delivery/escalation, and application rollback on the selected infrastructure. Repeat the documented load probe on staging.
 8. Promote only after provider permissions, privacy/retention approval, seller operating rules, and the supervised pilot in `RELEASE_STATUS.md` are complete.
 
+## Public demo
+
+`render.demo.yaml` deploys a single free web service for showing TindaBot to prospects. It runs with `DEMO_MODE=true`, `DELIVERY_MODE=dry_run` and SQLite on the instance's ephemeral disk, migrated and seeded with the sample shop (`tindabot seed-demo` seeds the same six products as the browser preview) on every start.
+
+- Visitors see the sample workspace and can use **Talk to your bot** without a token through the public, read-only `POST /demo/test-chat`. It shares the operator test chat's code, so nothing is saved or sent.
+- No secrets are set, so operator endpoints return 401, the webhook returns 403, and `/docs` is hidden. Settings refuse `DEMO_MODE` with `APP_ENV=production` or live delivery.
+- There is no worker, Messenger, Sheet or email. Never add provider credentials or a real `DATABASE_URL` to the demo service.
+- The public chat has no rate limit beyond the request-size bounds; put the demo behind platform limits if it draws abuse.
+
+Deploy: Render → New → Blueprint → choose `render.demo.yaml`. Check `/readyz` and `/demo` (`{"enabled": true}`), then open `/#automation`.
+
 ## Workspace operating limits
 
 - This is a single-shop operator interface, using the existing privileged bearer token. It does not provide individual staff accounts, role-specific UI, or per-person audit attribution.

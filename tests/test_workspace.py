@@ -269,3 +269,23 @@ def test_test_chat_rejects_forged_quotes_and_malformed_state(client):
         )
         # A clean client error, never a 500 from the process that also takes webhooks.
         assert 400 <= response.status_code < 500
+
+
+def test_public_demo_chat_exists_only_in_demo_mode(client, db, settings):
+    from fastapi.testclient import TestClient
+
+    from tindabot.main import create_app
+
+    body = {"state": "IDLE", "context": {}, "value": "2 ube pandesal po"}
+    assert client.get("/demo").json() == {"enabled": False}
+    assert client.post("/demo/test-chat", json=body).status_code in {404, 405}
+    demo_settings = settings.model_copy(update={"demo_mode": True})
+    with TestClient(create_app(demo_settings, db)) as demo:
+        assert demo.get("/demo").json() == {"enabled": True}
+        reply = demo.post("/demo/test-chat", json=body).json()
+        assert reply["context"]["cart"] == {"UBE-01": 2}
+        # Demo mode opens only the read-only chat; operator data stays protected.
+        assert demo.get("/admin/workspace").status_code == 401
+        assert demo.get("/docs").status_code == 404
+    with db.sessions() as session:
+        assert session.scalar(select(func.count()).select_from(Conversation)) == 0

@@ -85,7 +85,7 @@ def create_app(settings=None, database=None):
 
     app = FastAPI(
         title="TindaBot",
-        docs_url=None if settings.app_env == "production" else "/docs",
+        docs_url=None if settings.app_env == "production" or settings.demo_mode else "/docs",
         redoc_url=None,
         lifespan=lifespan,
     )

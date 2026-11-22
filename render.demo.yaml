@@ -1,0 +1,33 @@
+# Public read-only demo: sample workspace plus a "Talk to your bot" chat on a sample catalog.
+# No secrets, no worker, no Messenger/Sheets/email. SQLite on the instance's ephemeral disk is
+# rebuilt and re-seeded on every start; nothing a visitor does is saved.
+# Never point this at a real database or add provider credentials here.
+services:
+  - type: web
+    name: tindabot-demo
+    runtime: python
+    region: singapore
+    plan: free
+    buildCommand: pip install uv==0.12.21 && uv sync --frozen --no-dev
+    startCommand: uv run --no-sync alembic upgrade head && uv run --no-sync tindabot seed-demo && uv run --no-sync uvicorn tindabot.main:create_app --factory --host 0.0.0.0 --port $PORT --no-access-log
+    healthCheckPath: /readyz
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.15
+      - key: APP_ENV
+        value: development
+      - key: DEMO_MODE
+        value: "true"
+      - key: DELIVERY_MODE
+        value: dry_run
+      - key: DATABASE_URL
+        value: sqlite:///data/tindabot.db
+      - key: SHOP_NAME
+        value: Sari Studio
+      - key: PAYMENT_METHODS
+        value: cod,gcash
+      - key: GCASH_INSTRUCTIONS
+        value: "Sample only: send to 0917 000 0000 (Sari Studio) and keep your reference number."
+      # No Sheet sync runs in the demo, so keep the seeded catalog usable for the instance lifetime.
+      - key: CATALOG_MAX_AGE_SECONDS
+        value: "31536000"

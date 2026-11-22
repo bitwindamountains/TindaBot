@@ -31,3 +31,9 @@ def test_configuration_errors_hide_raw_inputs(values):
         Settings(_env_file=None, **values)
     assert "config-secret-sentinel" not in str(error.value)
     assert "input_value" not in str(error.value)
+
+
+@pytest.mark.parametrize("values", [{"app_env": "production"}, {"delivery_mode": "live"}])
+def test_demo_mode_refuses_production_and_live_delivery(values):
+    with pytest.raises(ValidationError, match="DEMO_MODE"):
+        Settings(_env_file=None, demo_mode=True, **values)

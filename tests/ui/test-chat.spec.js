@@ -7,6 +7,22 @@ test('preview explains that the test chat needs a connected shop', async ({page}
   await expect(page.getByText('The test chat uses your real catalog and FAQ')).toBeVisible();
 });
 
+test('public demo servers unlock the preview test chat without a token', async ({page}) => {
+  const requests = [];
+  await page.route('**/demo', route => route.fulfill({json: {enabled: true}}));
+  await page.route('**/demo/test-chat', route => {
+    requests.push(route.request());
+    return route.fulfill({json: {state: 'CART', context: {cart: {'TOTE-01': 2}}, replies: [{text: 'Your cart\n2 × Everyday canvas tote — PHP 980.00'}], handed_over: false, catalog_fresh: true}});
+  });
+  await page.goto('/#automation');
+  await expect(page.getByText('Try a message your customers send')).toContainText('2 canvas tote po');
+  await page.getByLabel('Message as a customer').fill('2 canvas tote po');
+  await page.getByRole('button', {name: 'Send'}).click();
+  await expect(page.getByText('Everyday canvas tote — PHP 980.00')).toBeVisible();
+  expect(requests[0].postDataJSON()).toEqual({state: 'IDLE', context: {}, value: '2 canvas tote po'});
+  expect(requests[0].headers().authorization).toMatch(/^Bearer\s*$/);
+});
+
 test('test chat carries the bot state between messages and mirrors handover', async ({page}) => {
   const now = Date.now() / 1000, bodies = [];
   const snapshot = {shop_name: 'Test shop', generated_at: now, summary: {orders: 0, order_value: 0, pending: 0, products: 0}, orders: [], products: [], series: Array.from({length: 7}, (_, i) => ({timestamp: now - (6 - i) * 86400, value: 0})), automation: true, delivery_mode: 'dry_run', worker_age_seconds: 0, failures: 0, queue: 0, handover_count: 0};

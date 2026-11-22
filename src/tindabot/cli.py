@@ -44,6 +44,19 @@ DEMO = {
     ],
 }
 
+# Matches the browser preview shop in web/demo.js so the public demo chat and workspace agree.
+SHOWCASE = {
+    "products": [
+        {"sku": "TOTE-01", "name": "Everyday canvas tote", "price_minor": 49000, "stock": 24},
+        {"sku": "MUG-01", "name": "Sunday ceramic mug", "price_minor": 38000, "stock": 4},
+        {"sku": "POUCH-01", "name": "Little things pouch", "price_minor": 25000, "stock": 36},
+        {"sku": "NOTE-01", "name": "Daily notes journal", "price_minor": 32000, "stock": 18},
+        {"sku": "CANDLE-01", "name": "Slow morning candle", "price_minor": 59000, "stock": 3},
+        {"sku": "TRAY-01", "name": "Pebble catchall tray", "price_minor": 45000, "stock": 12},
+    ],
+    "faq": DEMO["faq"],
+}
+
 
 def main():
     parser = argparse.ArgumentParser(description="TindaBot operator tools")
@@ -117,7 +130,7 @@ def main():
             if settings.app_env == "production":
                 parser.error("Demo data is forbidden in production")
             with db.sessions.begin() as session:
-                import_catalog(session, CatalogImport(**DEMO))
+                import_catalog(session, CatalogImport(**(SHOWCASE if settings.demo_mode else DEMO)))
             print("Demo catalog imported. Existing inventory was preserved.")
         elif args.command == "jobs":
             with db.sessions() as session:
