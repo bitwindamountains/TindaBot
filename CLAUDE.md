@@ -12,7 +12,7 @@ Product context: `PRODUCT.md`. Original spec: `03_TindaBot_Blueprint.md` (the co
 - Run worker: `.venv/Scripts/uv.exe run tindabot worker`
 - Refresh local sample catalog (stale after an hour without live Sheet sync): `.venv/Scripts/uv.exe run tindabot seed-demo`
 - Lint/format: `.venv/Scripts/uv.exe run ruff check . && .venv/Scripts/uv.exe run ruff format --check .`
-- Python tests: `.venv/Scripts/uv.exe run pytest -q` (PostgreSQL tests skip locally; CI runs them)
+- Python tests: `.venv/Scripts/python.exe -m pytest -q` (`uv run pytest` hits a uv trampoline error on this machine; PostgreSQL tests skip locally, CI runs them)
 - Browser tests: `npx playwright test` (reuses a server already on port 8000; rewrites `docs/validation/*.png`)
 - Full release gate: `docs/DEPLOYMENT.md` → "Local release gate"
 
@@ -24,6 +24,7 @@ Product context: `PRODUCT.md`. Original spec: `03_TindaBot_Blueprint.md` (the co
 - `src/tindabot/orders.py`: orders, status changes, `queue_order_update()` (same transaction as the status change).
 - `src/tindabot/worker.py`: job claiming, dispatch (24-hour window, STOP, lanes), maintenance/retention, Sheet sync.
 - `src/tindabot/workspace.py`: workspace API, `automation_insights()`, `/admin/workspace/test-chat`.
+- Demo mode: `DEMO_MODE` in `config.py` (refused with production or live delivery), public `/demo/test-chat` in `workspace.py`, `SHOWCASE` seed in `cli.py` (must match `web/demo.js` products), deploy via `render.demo.yaml`.
 - `src/tindabot/web/`: vanilla JS workspace (`app.js`, `demo.js` sample data, `studio.css` visual layer, `tokens.css`).
 
 ## Rules
@@ -37,6 +38,7 @@ Product context: `PRODUCT.md`. Original spec: `03_TindaBot_Blueprint.md` (the co
 - Per-customer data added to inbound payloads must stay inside `Inbox.payload` so retention and erasure remove it.
 - Schema changes need an Alembic migration and a documented rollback target.
 - Don't add dependencies without asking.
+- `/demo/test-chat` is unauthenticated: it must stay read-only and registered only when `DEMO_MODE` is on.
 
 ## Conventions
 

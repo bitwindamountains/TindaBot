@@ -1,18 +1,28 @@
 # Progress
 
-Last updated: 23 November 2026 · Latest commit: `68433de` · CI: [run 39212795675](https://github.com/bitwindamountains/TindaBot/actions/runs/39212795675) passed
+Last updated: 23 November 2026 · Latest commit: `9b8eddf` · CI: [run 45188274476](https://github.com/bitwindamountains/TindaBot/actions/runs/45188274476) passed
 
 ## Status
 
-**Code: ready for staging.** Not yet deployed. Production also needs real provider accounts, a hosted rehearsal, privacy sign-off and a supervised pilot (see "Next steps").
+**Code: ready for staging; public demo ready to deploy.** Nothing deployed yet. Production also needs real provider accounts, a hosted rehearsal, privacy sign-off and a supervised pilot (see "Next steps").
 
-Validation at `68433de`: 158 Python tests pass locally (19 PostgreSQL tests run in CI only), 35 Playwright browser tests pass, `pip-audit` and `npm audit` report no vulnerabilities, the Render Blueprint validates, and the schema remains `0003`.
+Validation at `9b8eddf`: CI passes every step (183 Python tests including PostgreSQL, 36 Playwright tests, `pip-audit`, `npm audit`, wheel smoke, container API/worker readiness), the Render Blueprint validates, and the schema remains `0003`.
 
 ## Done in the 23 November 2026 session
 
 Pre-deployment review: lint/format clean, 161 Python tests pass (19 PostgreSQL tests CI-only), 36 Playwright tests pass. A scripted end-to-end run (signed webhook → worker → dry-run outbox) confirmed FAQ, typed cart and checkout, order and stock allocation, tracking, opt-in shipped update with note, STOP handover, and auth/signature rejection.
 
 Added a deployable public demo: `DEMO_MODE` (refused with production or live delivery), public read-only `POST /demo/test-chat` sharing the operator test chat, showcase catalog matching the browser preview, and `render.demo.yaml` (one free web service, SQLite, no secrets). See `docs/DEPLOYMENT.md` → "Public demo".
+
+| Area | What changed | Commits |
+|---|---|---|
+| Demo mode | `DEMO_MODE`, `/demo` flag, `/demo/test-chat`, showcase seed, `render.demo.yaml`, docs | `1bc20a7` |
+| Dependencies | `pip-audit` advisories fixed: certifi, filelock, oauthlib, opentelemetry-api, pyasn1 upgraded in `uv.lock` | `7c326c3` |
+| Tooling | uv 0.12.21 → 0.13.4 (PYSEC-2026-4321) in CI, Dockerfile and both blueprints | `7e15557` |
+| CI | Actions moved to Node 24 majors (checkout v5, setup-uv v7, setup-node v5, upload-artifact v6) | `1e33348` |
+| Matching | A product's last name word alone now picks it ("2 mugs po", "candle po"); other single name words still need a second match, so "good morning" stays a greeting. Reviewed the demo locally with the blueprint start command: health, auth gates, full chat checkout, read-only confirm, browser chat under CSP | `9b8eddf` |
+
+**Paused at:** deploying the demo. No Render access exists on this machine. Either deploy via dashboard (Blueprints → New Blueprint Instance → repo `main`, Blueprint Path `render.demo.yaml`), or save a Render API key to the session scratchpad so the service can be created through the API after confirmation. Then verify `/readyz`, `/demo` returns `{"enabled": true}`, and a chat checkout at `/#automation`.
 
 ## Done in the 19 October 2026 session
 
@@ -32,8 +42,9 @@ Plan for the automation work: `docs/ideas/automation-teaching-loop.md` (steps 1�
 
 ## Next steps (owner: you)
 
+0. **Demo:** deploy `render.demo.yaml` (see "Paused at" above). Free plan sleeps after ~15 minutes idle; the first visit after that takes about a minute.
 1. **Accounts:** Meta test Page + app (Page ID, App ID, App secret, Page token, verify token), Google Sheet + service account (base64 JSON key), SMTP sender, PostgreSQL database, public privacy notice URL.
-2. **Staging on Render:** New → Blueprint from this repo; fill the `tindabot-production` environment group (see `.env.example`); set `DELIVERY_MODE=dry_run` for staging; generate `ADMIN_TOKEN` and `STATUS_TOKEN` with `uv run tindabot new-token`; deploy `68433de`; check `/readyz`, workspace Connect, worker heartbeat.
+2. **Staging on Render:** New → Blueprint from this repo; fill the `tindabot-production` environment group (see `.env.example`); set `APP_ENV=development` and `DELIVERY_MODE=dry_run` for staging (production settings refuse dry-run); generate `ADMIN_TOKEN` and `STATUS_TOKEN` with `uv run tindabot new-token`; deploy `1e33348`; check `/readyz`, workspace Connect, worker heartbeat.
 3. **Connect providers:** Meta webhook `https://<app>/webhook`; `tindabot setup-sheet` and `tindabot setup-profile`; fill Products and FAQ; switch to `live`; test browse, checkout, tracking, handover, seller email, Sheet row.
 4. **Before real customers:** backup/restore and rollback rehearsal (`docs/OPERATIONS.md`), privacy and retention approval, one-week supervised pilot with the seller, then `PRODUCTION_ACKNOWLEDGED=true`.
 
@@ -46,7 +57,9 @@ Plan for the automation work: `docs/ideas/automation-teaching-loop.md` (steps 1�
 
 ## Known limits
 
+- The public demo chat (`/demo/test-chat`) has no rate limit beyond request-size bounds.
+- Render's `pip install uv==0.13.4` build step is untested until the first Render deploy (CI covers Docker only).
+
 - Plain-language rules are informed guesses for English/Taglish; confirm against pilot data from the missed-question list.
 - Refused order updates are suppressed (so they never block replies) and therefore don't appear in the health failure count.
-- The installed-wheel smoke test (`scripts/smoke_release.py`) was not re-run in this session (no network for a clean environment).
 - Physical-device mobile performance and non-Chromium browsers remain unverified.
