@@ -1,12 +1,12 @@
 # Progress
 
-Last updated: 24 November 2026 · Latest commit: `9b8eddf` · CI: [run 45188274476](https://github.com/bitwindamountains/TindaBot/actions/runs/45188274476) passed
+Last updated: 24 November 2026 · Latest commit: `3daa4cb` · CI: [run 45223774866](https://github.com/bitwindamountains/TindaBot/actions/runs/45223774866) passed
 
 ## Status
 
 **Code: ready for staging. Public demo live at https://tindabot.onrender.com.** Staging and production are not deployed. Production also needs real provider accounts, a hosted rehearsal, privacy sign-off and a supervised pilot (see "Next steps").
 
-Validation at `9b8eddf`: CI passes every step (183 Python tests including PostgreSQL, 36 Playwright tests, `pip-audit`, `npm audit`, wheel smoke, container API/worker readiness), the Render Blueprint validates, and the schema remains `0003`.
+Validation at `3daa4cb`: CI passes every step (194 Python tests including PostgreSQL, 36 Playwright tests, `pip-audit`, `npm audit`, wheel smoke, container API/worker readiness), the Render Blueprint validates, and the schema remains `0003`.
 
 ## Done in the 23 November 2026 session
 
@@ -22,7 +22,14 @@ Added a deployable public demo: `DEMO_MODE` (refused with production or live del
 | CI | Actions moved to Node 24 majors (checkout v5, setup-uv v7, setup-node v5, upload-artifact v6) | `1e33348` |
 | Matching | A product's last name word alone now picks it ("2 mugs po", "candle po"); other single name words still need a second match, so "good morning" stays a greeting. Reviewed the demo locally with the blueprint start command: health, auth gates, full chat checkout, read-only confirm, browser chat under CSP | `9b8eddf` |
 
-**Demo deployed (24 November 2026):** https://tindabot.onrender.com, a free Render web service created by hand in the dashboard with the values from `render.demo.yaml` (the Blueprint flow asked for a card that was declined; Hugging Face Docker Spaces now need PRO). It auto-deploys `main`. Verified live: `/readyz` ready, `/demo` enabled, `/docs` 404, admin 401, webhook 403, CSP headers, chat FAQ/checkout/over-stock/handover/tampered-quote, browser chat with no console errors. Keep the service's settings in step with `render.demo.yaml` by hand.
+**Demo deployed (24 November 2026):** https://tindabot.onrender.com, a free Render web service created by hand in the dashboard with the values from `render.demo.yaml` (the Blueprint flow asked for a card that was declined; Hugging Face Docker Spaces now need PRO). It auto-deploys `main`. Verified live: `/readyz` ready, `/demo` enabled, `/docs` 404, admin 401, webhook 403, CSP headers, chat FAQ/checkout/over-stock/handover/tampered-quote, browser chat with no console errors. Auto-deploy from `main` confirmed by the `3daa4cb` push. Keep the service's settings in step with `render.demo.yaml` by hand.
+
+| Area | What changed | Commits |
+|---|---|---|
+| Demo rate limit | `/demo/test-chat` allows 30 messages a minute per visitor (first `X-Forwarded-For` address) and 300 overall, then 429 with `Retry-After`; the workspace explains the wait | `3daa4cb` |
+| Chat | Several products with counts go into the cart at once ("2 tote and 1 mug", all or nothing on stock); messages naming several products ask "Which one?" with buttons; the fallback says what the bot can do; the empty test chat offers starter messages to tap. Applies to live Messenger too | `3daa4cb` |
+
+Verified live after the redeploy: health and auth gates, multi-item cart, which-one, short stock, new fallback, rate limit (429 and its browser message), starter chips.
 
 ## Done in the 19 October 2026 session
 
