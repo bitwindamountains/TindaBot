@@ -1,10 +1,10 @@
 # Progress
 
-Last updated: 23 November 2026 · Latest commit: `9b8eddf` · CI: [run 45188274476](https://github.com/bitwindamountains/TindaBot/actions/runs/45188274476) passed
+Last updated: 24 November 2026 · Latest commit: `9b8eddf` · CI: [run 45188274476](https://github.com/bitwindamountains/TindaBot/actions/runs/45188274476) passed
 
 ## Status
 
-**Code: ready for staging; public demo ready to deploy.** Nothing deployed yet. Production also needs real provider accounts, a hosted rehearsal, privacy sign-off and a supervised pilot (see "Next steps").
+**Code: ready for staging. Public demo live at https://tindabot.onrender.com.** Staging and production are not deployed. Production also needs real provider accounts, a hosted rehearsal, privacy sign-off and a supervised pilot (see "Next steps").
 
 Validation at `9b8eddf`: CI passes every step (183 Python tests including PostgreSQL, 36 Playwright tests, `pip-audit`, `npm audit`, wheel smoke, container API/worker readiness), the Render Blueprint validates, and the schema remains `0003`.
 
@@ -22,7 +22,7 @@ Added a deployable public demo: `DEMO_MODE` (refused with production or live del
 | CI | Actions moved to Node 24 majors (checkout v5, setup-uv v7, setup-node v5, upload-artifact v6) | `1e33348` |
 | Matching | A product's last name word alone now picks it ("2 mugs po", "candle po"); other single name words still need a second match, so "good morning" stays a greeting. Reviewed the demo locally with the blueprint start command: health, auth gates, full chat checkout, read-only confirm, browser chat under CSP | `9b8eddf` |
 
-**Paused at:** deploying the demo. No Render access exists on this machine. Either deploy via dashboard (Blueprints → New Blueprint Instance → repo `main`, Blueprint Path `render.demo.yaml`), or save a Render API key to the session scratchpad so the service can be created through the API after confirmation. Then verify `/readyz`, `/demo` returns `{"enabled": true}`, and a chat checkout at `/#automation`.
+**Demo deployed (24 November 2026):** https://tindabot.onrender.com, a free Render web service created by hand in the dashboard with the values from `render.demo.yaml` (the Blueprint flow asked for a card that was declined; Hugging Face Docker Spaces now need PRO). It auto-deploys `main`. Verified live: `/readyz` ready, `/demo` enabled, `/docs` 404, admin 401, webhook 403, CSP headers, chat FAQ/checkout/over-stock/handover/tampered-quote, browser chat with no console errors. Keep the service's settings in step with `render.demo.yaml` by hand.
 
 ## Done in the 19 October 2026 session
 
@@ -42,7 +42,6 @@ Plan for the automation work: `docs/ideas/automation-teaching-loop.md` (steps 1�
 
 ## Next steps (owner: you)
 
-0. **Demo:** deploy `render.demo.yaml` (see "Paused at" above). Free plan sleeps after ~15 minutes idle; the first visit after that takes about a minute.
 1. **Accounts:** Meta test Page + app (Page ID, App ID, App secret, Page token, verify token), Google Sheet + service account (base64 JSON key), SMTP sender, PostgreSQL database, public privacy notice URL.
 2. **Staging on Render:** New → Blueprint from this repo; fill the `tindabot-production` environment group (see `.env.example`); set `APP_ENV=development` and `DELIVERY_MODE=dry_run` for staging (production settings refuse dry-run); generate `ADMIN_TOKEN` and `STATUS_TOKEN` with `uv run tindabot new-token`; deploy `1e33348`; check `/readyz`, workspace Connect, worker heartbeat.
 3. **Connect providers:** Meta webhook `https://<app>/webhook`; `tindabot setup-sheet` and `tindabot setup-profile`; fill Products and FAQ; switch to `live`; test browse, checkout, tracking, handover, seller email, Sheet row.
@@ -58,7 +57,7 @@ Plan for the automation work: `docs/ideas/automation-teaching-loop.md` (steps 1�
 ## Known limits
 
 - The public demo chat (`/demo/test-chat`) has no rate limit beyond request-size bounds.
-- Render's `pip install uv==0.13.4` build step is untested until the first Render deploy (CI covers Docker only).
+- The demo's free Render plan sleeps after ~15 minutes idle; the first visit after that takes about a minute.
 
 - Plain-language rules are informed guesses for English/Taglish; confirm against pilot data from the missed-question list.
 - Refused order updates are suppressed (so they never block replies) and therefore don't appear in the health failure count.
