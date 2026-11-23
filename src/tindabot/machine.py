@@ -79,14 +79,19 @@ def faq_answer(normalized, faqs):
 
 
 def find_product(normalized, products):
-    """A product whose name words appear in the message, ignoring a plural "s"."""
+    """A product whose name words appear in the message, ignoring a plural "s".
+
+    Two name words are enough. One is enough only if it is the name's last word, its noun
+    ("candle" in "Slow morning candle"), so "good morning" never picks the candle.
+    """
     stem = lambda word: word[:-1] if word.endswith("s") else word  # noqa: E731
     words = {stem(w) for w in normalized.split()}
     hits = []
     for product in products.values():
         name = [stem(w) for w in normalize(product["name"]).split() if len(w) >= 3]
         found = sum(w in words for w in name)
-        if name and found >= min(2, len(name)):
+        noun = next((w for w in reversed(name) if w.isalpha()), None)
+        if name and (found >= min(2, len(name)) or noun in words):
             hits.append((found, product["sku"]))
     hits.sort(reverse=True)
     return hits[0][1] if hits and (len(hits) == 1 or hits[0][0] > hits[1][0]) else None

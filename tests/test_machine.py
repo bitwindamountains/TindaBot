@@ -42,6 +42,27 @@ def test_product_and_quantity_go_straight_to_the_cart(message, sku, qty):
     assert body.startswith("Your cart")
 
 
+@pytest.mark.parametrize(
+    ("message", "sku", "state"),
+    [("2 pandesal po", "UBE-01", "CART"), ("crinkles po", "CHOCO-01", "QTY")],
+)
+def test_a_product_name_last_word_alone_picks_it(message, sku, state):
+    result, _ = say(message)
+    assert result.state == state
+    assert sku in result.context.get("cart", {}) or result.context.get("selected") == sku
+
+
+def test_other_single_name_words_do_not_pick_a_product():
+    from tindabot.cli import SHOWCASE
+
+    view = {**VIEW, "products": [{**p, "image_url": ""} for p in SHOWCASE["products"]]}
+    # "morning" is in "Slow morning candle" but is not its noun.
+    assert transition("IDLE", {}, "good morning po", view).replies[0]["text"].startswith("Welcome")
+    assert say("cheese po")[0].state == "IDLE"
+    result = transition("IDLE", {}, "2 mugs po", view)
+    assert result.state == "CART" and result.context["cart"] == {"MUG-01": 2}
+
+
 def test_product_without_quantity_asks_how_many():
     result, body = say("ube pandesal")
     assert result.state == "QTY" and result.context["selected"] == "UBE-01"
