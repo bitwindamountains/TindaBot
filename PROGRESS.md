@@ -4,7 +4,7 @@ Last updated: 24 November 2026 · Latest commit: `3daa4cb` · CI: [run 452237748
 
 ## Status
 
-**Code: ready for staging. Public demo live at https://tindabot.onrender.com.** Staging and production are not deployed. Production also needs real provider accounts, a hosted rehearsal, privacy sign-off and a supervised pilot (see "Next steps").
+**Public demo live at https://tindabot.onrender.com. Staging is on hold by choice: TindaBot stays a demo for now.** Code is ready for staging; staging and production are not deployed. Production also needs real provider accounts, a hosted rehearsal, privacy sign-off and a supervised pilot (see "Next steps").
 
 Validation at `3daa4cb`: CI passes every step (194 Python tests including PostgreSQL, 36 Playwright tests, `pip-audit`, `npm audit`, wheel smoke, container API/worker readiness), the Render Blueprint validates, and the schema remains `0003`.
 
@@ -49,8 +49,10 @@ Plan for the automation work: `docs/ideas/automation-teaching-loop.md` (steps 1�
 
 ## Next steps (owner: you)
 
+**On hold (24 November 2026):** the project stays a demo for now. Staging is the private, fully connected rehearsal before launch (real PostgreSQL, the worker, a test Facebook Page, test Sheet and email); the demo has none of that and needs none of it. Resume at step 1 when you want to launch. Staging on Render costs money: there is no free worker plan, the free PostgreSQL expires, and `render.yaml` uses paid instances, so first settle a working card on Render or pick another host.
+
 1. **Accounts:** Meta test Page + app (Page ID, App ID, App secret, Page token, verify token), Google Sheet + service account (base64 JSON key), SMTP sender, PostgreSQL database, public privacy notice URL.
-2. **Staging on Render:** New → Blueprint from this repo; fill the `tindabot-production` environment group (see `.env.example`); set `APP_ENV=development` and `DELIVERY_MODE=dry_run` for staging (production settings refuse dry-run); generate `ADMIN_TOKEN` and `STATUS_TOKEN` with `uv run tindabot new-token`; deploy `1e33348`; check `/readyz`, workspace Connect, worker heartbeat.
+2. **Staging on Render:** New → Blueprint from this repo; fill the `tindabot-production` environment group (see `.env.example`); set `APP_ENV=development` and `DELIVERY_MODE=dry_run` for staging (production settings refuse dry-run); generate `ADMIN_TOKEN` and `STATUS_TOKEN` with `uv run tindabot new-token`; deploy the latest `main`; check `/readyz`, workspace Connect, worker heartbeat.
 3. **Connect providers:** Meta webhook `https://<app>/webhook`; `tindabot setup-sheet` and `tindabot setup-profile`; fill Products and FAQ; switch to `live`; test browse, checkout, tracking, handover, seller email, Sheet row.
 4. **Before real customers:** backup/restore and rollback rehearsal (`docs/OPERATIONS.md`), privacy and retention approval, one-week supervised pilot with the seller, then `PRODUCTION_ACKNOWLEDGED=true`.
 
