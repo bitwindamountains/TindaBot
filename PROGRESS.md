@@ -56,7 +56,7 @@ Plan for the automation work: `docs/ideas/automation-teaching-loop.md` (steps 1â
 
 ## Known limits
 
-- The public demo chat (`/demo/test-chat`) has no rate limit beyond request-size bounds.
+- The public demo chat's per-visitor limit trusts `X-Forwarded-For`, which a client can forge; only the overall cap (300 messages a minute) reliably bounds load.
 - The demo's free Render plan sleeps after ~15 minutes idle; the first visit after that takes about a minute.
 
 - Plain-language rules are informed guesses for English/Taglish; confirm against pilot data from the missed-question list.

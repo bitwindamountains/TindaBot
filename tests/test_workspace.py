@@ -289,3 +289,25 @@ def test_public_demo_chat_exists_only_in_demo_mode(client, db, settings):
         assert demo.get("/docs").status_code == 404
     with db.sessions() as session:
         assert session.scalar(select(func.count()).select_from(Conversation)) == 0
+
+
+def test_public_demo_chat_is_rate_limited_per_visitor_and_overall(db, settings, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from tindabot import workspace
+    from tindabot.main import create_app
+
+    monkeypatch.setattr(workspace, "DEMO_CHAT_PER_VISITOR", 3)
+    monkeypatch.setattr(workspace, "DEMO_CHAT_OVERALL", 5)
+    body = {"state": "IDLE", "context": {}, "value": "hm po?"}
+    with TestClient(create_app(settings.model_copy(update={"demo_mode": True}), db)) as demo:
+
+        def send(ip):
+            return demo.post("/demo/test-chat", json=body, headers={"X-Forwarded-For": ip})
+
+        assert [send("1.1.1.1").status_code for _ in range(4)] == [200, 200, 200, 429]
+        limited = send("1.1.1.1")
+        assert 1 <= int(limited.headers["Retry-After"]) <= 60
+        # Another visitor still gets through until the overall cap is reached.
+        assert [send("2.2.2.2").status_code for _ in range(3)] == [200, 200, 429]
+        assert send("3.3.3.3").status_code == 429

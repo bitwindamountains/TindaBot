@@ -5,12 +5,13 @@ import hashlib
 import json
 import math
 import re
+import threading
 import time
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Literal
 
-from fastapi import Depends, HTTPException, Query, Response
+from fastapi import Depends, HTTPException, Query, Request, Response
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -28,6 +29,32 @@ from tindabot.service import apply_actions, view_for
 WEB = Path(__file__).with_name("web")
 DAY = 86_400
 MANILA_OFFSET = 28_800
+# Public demo chat limits, per one-minute window. The visitor key comes from X-Forwarded-For,
+# which a client can forge, so the overall cap is what bounds load on the demo instance.
+DEMO_CHAT_PER_VISITOR = 30
+DEMO_CHAT_OVERALL = 300
+
+
+def demo_chat_limiter():
+    lock = threading.Lock()
+    window = {"minute": None, "total": 0, "visitors": {}}
+
+    def limit(request: Request):
+        forwarded = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+        visitor = forwarded or (request.client.host if request.client else "")
+        now = time.time()
+        with lock:
+            if window["minute"] != now // 60:
+                window.update(minute=now // 60, total=0, visitors={})
+            seen = window["visitors"].get(visitor, 0)
+            # The overall cap is checked first, so at most DEMO_CHAT_OVERALL visitors are kept.
+            if window["total"] >= DEMO_CHAT_OVERALL or seen >= DEMO_CHAT_PER_VISITOR:
+                retry = str(max(1, math.ceil(60 - now % 60)))
+                raise HTTPException(429, "Too many messages", headers={"Retry-After": retry})
+            window["total"] += 1
+            window["visitors"][visitor] = seen + 1
+
+    return limit
 
 
 def activity_page(session, order_id, before=None):
@@ -235,7 +262,7 @@ def register_workspace(app, db, settings, operator):
     app.post("/admin/workspace/test-chat", dependencies=[Depends(operator)])(test_chat)
     if settings.demo_mode:
         # Same read-only handler; config forbids demo mode with production or live delivery.
-        app.post("/demo/test-chat")(test_chat)
+        app.post("/demo/test-chat", dependencies=[Depends(demo_chat_limiter())])(test_chat)
 
     @app.get("/demo", include_in_schema=False)
     def demo():

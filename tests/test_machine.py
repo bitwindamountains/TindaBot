@@ -213,3 +213,68 @@ def test_a_seller_faq_about_orders_beats_the_tracking_shortcut():
 @pytest.mark.parametrize("message", ["gusto ko kausapin seller", "need agent", "seller po"])
 def test_common_ways_to_ask_for_the_seller_still_hand_over(message):
     assert transition("IDLE", {}, message, VIEW).actions == ["pause"]
+
+
+def showcase(*extra):
+    from tindabot.cli import SHOWCASE
+
+    products = [*SHOWCASE["products"], *extra]
+    return {**VIEW, "products": [{**p, "image_url": ""} for p in products]}
+
+
+@pytest.mark.parametrize(
+    ("message", "cart"),
+    [
+        ("2 tote and 1 mug", {"TOTE-01": 2, "MUG-01": 1}),
+        ("2 canvas tote, 3 pouch po", {"TOTE-01": 2, "POUCH-01": 3}),
+        ("isang tote at dalawang mug", {"TOTE-01": 1, "MUG-01": 2}),
+    ],
+)
+def test_several_products_with_counts_go_into_the_cart_at_once(message, cart):
+    result = transition("IDLE", {}, message, showcase())
+    assert result.state == "CART" and result.context["cart"] == cart
+    assert result.replies[0]["text"].startswith("Your cart")
+
+
+def test_several_products_add_to_an_existing_cart():
+    result = transition("CART", {"cart": {"TOTE-01": 1}}, "1 tote and 1 tray", showcase())
+    assert result.context["cart"] == {"TOTE-01": 2, "TRAY-01": 1}
+
+
+def test_several_products_add_nothing_when_one_is_short_of_stock():
+    result = transition("CART", {"cart": {"TOTE-01": 1}}, "2 tote and 5 mug", showcase())
+    assert result.state == "CART" and result.context["cart"] == {"TOTE-01": 1}
+    assert "Sunday ceramic mug" in result.replies[0]["text"]
+
+
+def test_and_inside_a_product_name_is_not_a_second_item():
+    chips = {"sku": "CHIPS-01", "name": "Salt and pepper chips", "price_minor": 9000, "stock": 9}
+    result = transition("IDLE", {}, "2 salt and pepper chips", showcase(chips))
+    assert result.context["cart"] == {"CHIPS-01": 2}
+
+
+@pytest.mark.parametrize("message", ["tote and mug po", "pwede tote or mug"])
+def test_naming_several_products_without_counts_asks_which(message):
+    result = transition("IDLE", {}, message, showcase())
+    assert result.state == "IDLE" and result.replies[0]["text"] == COPY["which"]
+    payloads = [q["payload"] for q in result.replies[0]["quick_replies"]]
+    assert payloads == ["PRODUCT:TOTE-01", "PRODUCT:MUG-01"]
+    assert "misses" not in result.context
+
+
+def test_products_sharing_a_name_word_ask_which():
+    view = {
+        **VIEW,
+        "products": [
+            {"sku": "A", "name": "Ube Pandesal", "price_minor": 1, "stock": 5, "image_url": ""},
+            {"sku": "B", "name": "Cheese Pandesal", "price_minor": 1, "stock": 5, "image_url": ""},
+        ],
+    }
+    result = transition("IDLE", {}, "2 pandesal po", view)
+    assert [q["payload"] for q in result.replies[0]["quick_replies"]] == ["PRODUCT:A", "PRODUCT:B"]
+
+
+def test_fallback_says_what_the_bot_can_do_and_counts_a_miss():
+    result, body = say("asdfgh")
+    assert body == COPY["fallback"] and "products" in body
+    assert result.context["misses"] == 1

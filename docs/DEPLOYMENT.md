@@ -66,7 +66,7 @@ Run `uv run tindabot doctor` to check the configured environment. It reports mis
 - Visitors see the sample workspace and can use **Talk to your bot** without a token through the public, read-only `POST /demo/test-chat`. It shares the operator test chat's code, so nothing is saved or sent.
 - No secrets are set, so operator endpoints return 401, the webhook returns 403, and `/docs` is hidden. Settings refuse `DEMO_MODE` with `APP_ENV=production` or live delivery.
 - There is no worker, Messenger, Sheet or email. Never add provider credentials or a real `DATABASE_URL` to the demo service.
-- The public chat has no rate limit beyond the request-size bounds; put the demo behind platform limits if it draws abuse.
+- The public chat allows 30 messages a minute per visitor and 300 a minute overall, then returns 429 with `Retry-After` (`DEMO_CHAT_PER_VISITOR` and `DEMO_CHAT_OVERALL` in `workspace.py`). The visitor key is the first `X-Forwarded-For` address, which a client can forge, so the overall cap is what bounds load. Counters are in memory per process.
 
 Deploy: Render → New → Blueprint → choose `render.demo.yaml`. Check `/readyz` and `/demo` (`{"enabled": true}`), then open `/#automation`.
 

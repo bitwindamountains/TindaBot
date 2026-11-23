@@ -40,6 +40,9 @@ NUMBER_WORDS = {
     **dict.fromkeys(("sampu", "sampung", "ten"), 10),
 }
 CHECKOUT_STEPS = {"QTY", "DELIVERY", "NAME", "PHONE", "ADDRESS", "PAYMENT"}
+# Splits "2 tote and 1 mug" into items; used only when every piece names its own product.
+ITEM_SEPARATORS = re.compile(r",|&|\+|\b(?:and|at|saka|tsaka|pati)\b")
+CART_CHOICES = [("Add more", "ADD_MORE"), ("Checkout", "CHECKOUT"), ("Cancel", "CANCEL")]
 
 
 def normalize(value):
@@ -78,11 +81,12 @@ def faq_answer(normalized, faqs):
     return best
 
 
-def find_product(normalized, products):
-    """A product whose name words appear in the message, ignoring a plural "s".
+def product_matches(normalized, products):
+    """SKUs whose name words appear in the message, best matches only, in catalog order.
 
-    Two name words are enough. One is enough only if it is the name's last word, its noun
-    ("candle" in "Slow morning candle"), so "good morning" never picks the candle.
+    Plural "s" is ignored. Two name words are enough. One is enough only if it is the name's
+    last word, its noun ("candle" in "Slow morning candle"), so "good morning" never picks
+    the candle.
     """
     stem = lambda word: word[:-1] if word.endswith("s") else word  # noqa: E731
     words = {stem(w) for w in normalized.split()}
@@ -93,8 +97,44 @@ def find_product(normalized, products):
         noun = next((w for w in reversed(name) if w.isalpha()), None)
         if name and (found >= min(2, len(name)) or noun in words):
             hits.append((found, product["sku"]))
-    hits.sort(reverse=True)
-    return hits[0][1] if hits and (len(hits) == 1 or hits[0][0] > hits[1][0]) else None
+    best = max((found for found, _ in hits), default=0)
+    return [sku for found, sku in hits if found == best]
+
+
+def find_product(normalized, products):
+    """The one product the message names, or None when it names none or several."""
+    matches = product_matches(normalized, products)
+    return matches[0] if len(matches) == 1 else None
+
+
+def product_quantity(normalized, name):
+    """The count in a message, ignoring the product's own name ("Aloe Lotion 50ml" is not 50)."""
+    own = set(normalize(name).split())
+    return quantity(" ".join(w for w in normalized.split() if w not in own))
+
+
+def order_lines(raw, products):
+    """[(sku, qty)] when a message lists several different products, each with its own count
+    ("2 tote and 1 mug"); None otherwise, so "salt and pepper chips" stays one product."""
+    parts = [p for p in (normalize(part) for part in ITEM_SEPARATORS.split(raw.casefold())) if p]
+    if len(parts) < 2:
+        return None
+    lines = []
+    for part in parts:
+        sku = find_product(part, products)
+        qty = sku and product_quantity(part, products[sku]["name"])
+        if not qty:
+            return None
+        lines.append((sku, qty))
+    return lines if len({sku for sku, _ in lines}) == len(lines) else None
+
+
+def cart_summary(cart, products):
+    return "Your cart\n" + "\n".join(
+        f"{q} × {products[s]['name']} — {money(q * products[s]['price_minor'])}"
+        for s, q in cart.items()
+        if s in products
+    )
 
 
 def transition(state: str, context: dict, value: str, view: dict) -> Transition:
@@ -199,14 +239,7 @@ def transition(state: str, context: dict, value: str, view: dict) -> Transition:
             return reply(COPY["invalid_qty"])
         cart[sku] = cart.get(sku, 0) + qty
         result.state = "CART"
-        body = "Your cart\n" + "\n".join(
-            f"{q} × {products[s]['name']} — {money(q * products[s]['price_minor'])}"
-            for s, q in cart.items()
-            if s in products
-        )
-        return reply(
-            body, [("Add more", "ADD_MORE"), ("Checkout", "CHECKOUT"), ("Cancel", "CANCEL")]
-        )
+        return reply(cart_summary(cart, products), CART_CHOICES)
     if state == "DELIVERY" and raw in {"DELIVERY:delivery", "DELIVERY:pickup"}:
         ctx["delivery"] = raw.split(":")[1]
         ctx.pop("address", None)
@@ -280,12 +313,26 @@ def transition(state: str, context: dict, value: str, view: dict) -> Transition:
             return reply(answer)
         if TRACK.search(normalized):
             return transition(state, ctx, "TRACK", view)
-        sku = find_product(normalized, products)
-        if sku:
-            # Count only words outside the product name ("Aloe Lotion 50ml" is not 50 units),
-            # and go through PRODUCT: so its stock check still applies.
-            name = set(normalize(products[sku]["name"]).split())
-            qty = quantity(" ".join(w for w in normalized.split() if w not in name))
+        lines = order_lines(raw, products)
+        if lines:
+            # All or nothing: every item is checked against stock before the cart changes.
+            cart = dict(ctx.get("cart", {}))
+            for sku, qty in lines:
+                if cart.get(sku, 0) + qty > min(99, products[sku]["stock"]):
+                    return reply(COPY["short_stock"].format(name=products[sku]["name"]))
+                cart[sku] = cart.get(sku, 0) + qty
+            if len(cart) > 20:
+                return reply(COPY["cart_limit"])
+            ctx["cart"] = cart
+            result.state = "CART"
+            return reply(cart_summary(cart, products), CART_CHOICES)
+        matches = product_matches(normalized, products)
+        if len(matches) > 1:
+            return reply(COPY["which"], [(products[s]["name"], f"PRODUCT:{s}") for s in matches])
+        if matches:
+            # Go through PRODUCT: so its stock check still applies.
+            sku = matches[0]
+            qty = product_quantity(normalized, products[sku]["name"])
             picked = transition(state, ctx, f"PRODUCT:{sku}", view)
             if qty and picked.state == "QTY":
                 return transition("QTY", picked.context, str(qty), view)

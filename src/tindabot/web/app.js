@@ -243,7 +243,10 @@ function chatReply(reply) {
   return `<div class="chat-bubble chat-bot">${escape(reply.text || '').replaceAll('\n', '<br>')}</div>${chatChoices(reply.quick_replies)}`;
 }
 function chatLog() {
-  if (!testChat.log.length) return '<p class="chat-empty">Try a message your customers send, like <em>hm po?</em> or <em>' + (isDemo() ? '2 canvas tote po' : 'pa order po') + '</em>.</p>';
+  if (!testChat.log.length) {
+    const starters = isDemo() ? ['hm po?', '2 canvas tote po', '2 tote and 1 mug', 'san na order ko?', 'pakausap sa seller'] : ['hm po?', 'pa order po', 'san na order ko?', 'pakausap sa seller'];
+    return `<div class="chat-empty"><p>Try a message your customers send, or tap one to start.</p>${chatChoices(starters.map(text => ({title: text, payload: text})))}</div>`;
+  }
   return testChat.log.map(entry => entry.kind === 'customer' ? `<div class="chat-bubble chat-customer">${escape(entry.text)}</div>` : entry.kind === 'note' ? `<p class="chat-note">${escape(entry.text)}</p>` : chatReply(entry.reply)).join('');
 }
 function testChatPanel() {
@@ -334,6 +337,7 @@ async function api(path, options = {}, token = state.token) {
       throw new Error(messages[code] || 'This record changed or the action is no longer available. Reopen it to review the latest details before trying again.');
     }
     if (response.status === 422) throw new Error('Please check the values and try again.');
+    if (response.status === 429) throw new Error('That’s a lot of messages at once. Wait a minute, then try again.');
     throw new Error('The service couldn’t complete the request. Please try again shortly.');
   }
   return response.json();

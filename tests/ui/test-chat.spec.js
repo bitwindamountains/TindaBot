@@ -15,10 +15,11 @@ test('public demo servers unlock the preview test chat without a token', async (
     return route.fulfill({json: {state: 'CART', context: {cart: {'TOTE-01': 2}}, replies: [{text: 'Your cart\n2 × Everyday canvas tote — PHP 980.00'}], handed_over: false, catalog_fresh: true}});
   });
   await page.goto('/#automation');
-  await expect(page.getByText('Try a message your customers send')).toContainText('2 canvas tote po');
-  await page.getByLabel('Message as a customer').fill('2 canvas tote po');
-  await page.getByRole('button', {name: 'Send'}).click();
+  await expect(page.getByText('Try a message your customers send')).toBeVisible();
+  // Starter chips send their example as the customer's first message.
+  await page.getByRole('button', {name: '2 canvas tote po'}).click();
   await expect(page.getByText('Everyday canvas tote — PHP 980.00')).toBeVisible();
+  await expect(page.locator('.chat-customer')).toHaveText('2 canvas tote po');
   expect(requests[0].postDataJSON()).toEqual({state: 'IDLE', context: {}, value: '2 canvas tote po'});
   expect(requests[0].headers().authorization).toMatch(/^Bearer\s*$/);
 });
