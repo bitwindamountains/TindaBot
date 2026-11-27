@@ -4,7 +4,7 @@
 
 A Facebook Messenger ordering assistant for small Philippine online shops. Customers browse products, ask questions in English or Taglish, check out and track orders in chat. The seller runs the shop from a web workspace backed by PostgreSQL and Google Sheets.
 
-**[Try the live demo →](https://tindabot.onrender.com)** A sample shop ("Sari Studio") opens in preview mode. On the **Automation** page, **Talk to your bot** chats with the real conversation logic. Nothing is saved or sent. It runs on free hosting, so the first load can take about 30 seconds.
+**[Try the live demo →](https://tindabot.onrender.com)** A sample shop ("Sari Studio") opens in preview mode. On the **Automation** page, **Talk to your bot** chats with the real conversation logic. Nothing is saved or sent. It runs on free hosting, so the first load can take up to a minute.
 
 ![Seller workspace overview with orders, revenue and stock](docs/images/workspace.webp)
 
