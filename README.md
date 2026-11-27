@@ -1,146 +1,140 @@
 # TindaBot
 
-A Messenger ordering service for one Facebook Page: product browsing, Taglish FAQs, guided checkout, order tracking, seller takeover, PostgreSQL inventory, and Google Sheets operations.
+[![CI](https://github.com/bitwindamountains/TindaBot/actions/workflows/ci.yml/badge.svg)](https://github.com/bitwindamountains/TindaBot/actions/workflows/ci.yml)
 
-**Release status: implemented locally; not deployed or approved for public orders.** Live provider access, seller decisions, monitoring setup, and the supervised pilot are still required. See [release status](docs/RELEASE_STATUS.md) and [production plan](docs/PRODUCTION_PLAN.md).
+A Facebook Messenger ordering assistant for small Philippine online shops. Customers browse products, ask questions in English or Taglish, check out and track orders in chat. The seller runs the shop from a web workspace backed by PostgreSQL and Google Sheets.
 
-## What is implemented
+**[Try the live demo →](https://tindabot.onrender.com)** A sample shop ("Sari Studio") opens in preview mode. On the **Automation** page, **Talk to your bot** chats with the real conversation logic. Nothing is saved or sent. It runs on free hosting, so the first load can take about 30 seconds.
 
-- Raw-body webhook signature checks, Page validation, bounded bodies, durable intake before acknowledgement, and duplicate-event protection.
-- Pure conversation transitions; delivery/pickup, configured COD/GCash/bank instructions, Unicode names, PH phone validation, and confirmation tied to a checkout ID/version.
-- Atomic order and inventory allocation, price-change reconfirmation, cancellation/restock, unpaid expiry, and customer-owned tracking.
-- Separate API and worker processes; transactional outbox, independent destination retries, ordered jobs, uncertain-delivery review, and stale reply/window checks.
-- Sheet catalog import, order projection using raw cell values, an explicit Commands tab for seller status changes, and seller email containing minimal customer data.
-- Operator credentials distinct from status credentials, global automation switch, human takeover, privacy field erasure, retention, health checks, migrations, CI, and backup tooling.
-- Responsive seller workspace at `/`: light/dark themes, order overview and detail, status changes, private order notes/history, external-refund tracking, stock adjustments, CSV export, and automation controls. The public shell shows labeled sample data until an operator connects.
-- Deterministic plain-language understanding, no AI: buying, tracking and handover phrases in English and Taglish, product names with quantities ("2 ube pandesal po"), typed checkout answers ("2 pcs", "pickup", "gcash"), and questions mid-checkout, which are answered and the step repeated.
-- Automation page: today's self-serve rate, questions the bot could not answer with a paste-ready **Add to FAQ** row, a **Talk to your bot** test chat that runs the live conversation logic without saving or sending anything, and opt-in order updates to customers (confirmed, shipped or ready for pickup, delivered, payment received).
+![Seller workspace overview with orders, revenue and stock](docs/images/workspace.webp)
 
-No customer messages or emails are sent in the default `dry_run` mode. Dry-run jobs are recorded as `dry_run`, never as delivered. They are not automatically replayed when switching to live mode.
 
-## Run locally
+> **Status:** demo only, not yet in use. The code is complete and tested locally; connecting a real Facebook Page, a supervised pilot and monitoring are still to do. See [release status](docs/RELEASE_STATUS.md).
 
-Python 3.12 is required. Install [uv](https://docs.astral.sh/uv/getting-started/installation/) or use the existing `.venv/Scripts/uv.exe` in this Windows workspace.
+## Features
 
-```powershell
+**For customers (in Messenger)**
+- Browse products, add quantities ("2 ube pandesal po"), and choose delivery or pickup
+- Pay by cash on delivery, GCash or bank transfer, using instructions the seller configures
+- Ask questions mid-checkout: the bot answers from the FAQ, then repeats the current step
+- Track orders, and opt in to updates when an order is confirmed, shipped or delivered
+- Type `MENU` to return to the bot after talking to the seller
+
+**For the seller (web workspace)**
+- Order overview and detail, status changes, private notes, refund tracking, CSV export
+- Inventory with stock adjustments; the product catalog and FAQ are edited in Google Sheets
+- **Automation page:** how many conversations the bot handled alone, the questions it couldn't answer (each with an **Add to FAQ** row ready to paste), and a test chat
+- Human takeover: when the seller replies from the Page inbox, the bot pauses for that customer
+- Light and dark themes, keyboard shortcuts (`Ctrl/Cmd+K`, `/`), mobile layout, reduced-motion support
+
+**No AI.** Understanding is deterministic: phrase and keyword matching in English and Taglish, so answers are predictable and never invented.
+
+## Walkthrough: a seller's day
+
+**1. Work the order queue.** Every order by stage, from to-confirm to delivered, with filters and CSV export.
+
+![Orders page with order counts by stage and the orders table](docs/images/orders.webp)
+
+**2. Confirm an order.** The order panel shows the items, delivery and payment method, and moves the order through each stage.
+
+![Order side panel with total, status steps, customer and items](docs/images/order-detail.webp)
+
+**3. Keep stock honest.** The catalog shows what is in stock or running low. Every stock adjustment is logged.
+
+![Inventory cards with prices, stock counts and adjust-stock buttons](docs/images/inventory.webp)
+
+**4. Teach the bot.** How many conversations the bot handled alone, and each question it missed, ready to add to the FAQ.
+
+![Automation page: 44 of 52 conversations handled, with missed Taglish questions](docs/images/automation.webp)
+
+**5. Jump anywhere.** Quick actions (`Ctrl/Cmd+K`) open any page or task from the keyboard.
+
+![Quick actions dialog](docs/images/quick-actions.webp)
+
+## Engineering highlights
+
+- **No lost or duplicate orders:** webhook events are signature-checked and stored before Messenger gets its acknowledgement. Duplicate events are ignored, and each checkout creates at most one order (enforced in PostgreSQL).
+- **Correct stock under concurrency:** orders and inventory are allocated in one transaction. A price change since the quote asks the customer to reconfirm.
+- **Reliable outbound messages:** a separate worker sends Messenger replies, emails and Sheet updates through a transactional outbox, with retries per destination. Results that can't be confirmed go to the seller for review instead of being retried blindly.
+- **Safe by default:** the default `dry_run` mode sends nothing. Production startup refuses SQLite, weak or shared admin tokens, and missing settings.
+- **Privacy:** customers' personal fields can be erased on request; staff tokens can be limited to order status without customer data.
+- **Tested:** 194 Python tests in CI (87% coverage, including PostgreSQL concurrency and migration tests) and 36 browser tests for the workspace. A local load test handled 6,000 webhook events in 10 minutes with no errors and a 32 ms p95 acknowledgement ([report](docs/validation/local-load.json)).
+
+## Tech stack
+
+| Part | Technology |
+| --- | --- |
+| Service | Python 3.12, FastAPI, SQLAlchemy 2, Alembic, PostgreSQL (SQLite for local demos) |
+| Integrations | Messenger Platform (Graph API), Google Sheets (gspread), SMTP |
+| Workspace | Plain HTML, CSS and JavaScript; a small React + ShaderGradient hero bundle |
+| Quality | pytest, Ruff, pip-audit, Playwright, GitHub Actions |
+
+## Run it locally
+
+Requires Python 3.12 and [uv](https://docs.astral.sh/uv/).
+
+```sh
 uv sync --frozen
-if (-not (Test-Path .env)) { Copy-Item .env.example .env }
-# Fill the local test Page settings and generate independent tokens using:
-uv run tindabot new-token
+cp .env.example .env              # then fill in local settings
+uv run tindabot new-token         # generate the admin and status tokens for .env
 uv run alembic upgrade head
 uv run tindabot seed-demo
 uv run uvicorn tindabot.main:create_app --factory --port 8000 --no-access-log
+uv run tindabot worker            # in a second terminal
 ```
 
-In another terminal:
+Open **http://127.0.0.1:8000/** for the workspace. Choose **Connect shop** and enter your `ADMIN_TOKEN` to see the real database instead of the sample data. API docs are at `/docs` in development.
 
-```powershell
-uv run tindabot worker
-```
+To run a complete simulated order without any Facebook or Google credentials:
 
-`/healthz` is process liveness; `/readyz` verifies the expected database migration. Development API docs are at `/docs`. The operator health endpoint is `GET /admin/health` with `Authorization: Bearer <ADMIN_TOKEN>`.
-
-Open **http://127.0.0.1:8000/** for the seller workspace. Preview edits stay in the browser. Choose **Connect shop** and enter your local `ADMIN_TOKEN` to use the actual database. The token stays in tab memory; reload or disconnect clears it. Status-only tokens cannot read customer data. Production connections must use the host's HTTPS URL.
-
-Use **Ctrl/Cmd+K** for quick actions, or **/** to search. Explore daily order values by hovering the chart or using its keyboard-accessible slider. Ambient motion can be paused at the bottom of the workspace; it also respects system reduced-motion preferences and pauses offscreen or in a hidden tab.
-
-For a complete simulated order without any provider credentials:
-
-```powershell
+```sh
 uv run python scripts/demo_order.py
 ```
 
-SQLite is for sequential local demonstrations. For lock/concurrency testing, start PostgreSQL using `docker compose up -d postgres` and set `DATABASE_URL=postgresql+psycopg://tindabot:local-development-only@127.0.0.1:5432/tindabot` before migrating. The Compose password is deliberately development-only, and its port binds to localhost.
+SQLite is fine for local demos. For concurrency testing, start PostgreSQL with `docker compose up -d postgres` and set `DATABASE_URL=postgresql+psycopg://tindabot:local-development-only@127.0.0.1:5432/tindabot` before migrating. That password is for local development only.
 
-## Test and build
+## Tests
 
-```powershell
+```sh
 uv run ruff check .
 uv run ruff format --check .
 uv run pytest -q
 uv run pip-audit --skip-editable
-uv build
+npm ci && npx playwright install chromium && npm run test:ui     # browser tests
 ```
 
-PostgreSQL tests require a **disposable database whose name ends in `_test`**:
+PostgreSQL tests run only when `TEST_DATABASE_URL` points to a disposable database whose name ends in `_test`, because they truncate tables. CI starts its own PostgreSQL and runs them.
 
-```powershell
-$env:TEST_DATABASE_URL = 'postgresql+psycopg://USER:PASSWORD@localhost:5432/tindabot_test'
-uv run pytest -q --cov=tindabot --cov-report=term-missing
-```
+## Connecting a real Page
 
-Those tests truncate tables and exercise migration downgrade/upgrade in the named test database. Never point them at production. CI provisions its own PostgreSQL service and runs these tests. Without the variable, PostgreSQL tests are explicitly skipped.
+1. Create a Meta app and test Page, and put the app secret, verification token, Page token and app ID in `.env`.
+2. Expose the API over HTTPS, register `/webhook`, and subscribe the Page to messaging events.
+3. Share one Google Sheet with a service account and run `uv run tindabot setup-sheet` to create the **Products**, **FAQ**, **Orders** and **Commands** tabs.
+4. Configure SMTP for seller emails, run `uv run tindabot setup-profile`, then set `DELIVERY_MODE=live`.
 
-The isolated ShaderGradient hero build and browser checks use Node 24 during development/CI; the deployed workspace has no Node runtime dependency:
+### How the seller uses the Sheet
 
-```powershell
-npm.cmd ci
-npm.cmd run build:effects
-npx.cmd playwright install chromium
-npm.cmd run test:ui
-```
+| Tab | Seller edits | Behavior |
+| --- | --- | --- |
+| Products | `sku, name, price, stock, active, image_url` | Price in pesos. `stock` sets the starting stock for **new** SKUs only, so re-importing never refills sold stock. |
+| FAQ | `keywords, answer` | Comma-separated words or phrases, matched in order. |
+| Orders | nothing | Written by the worker and protected. The database stays the source of truth. |
+| Commands | `command_id, order_id, expected_version, action` | Change an order's status (`confirmed`, `paid`, `shipped`, `delivered`, `cancelled`) or `pause`/`resume` the bot. The worker writes the result. |
 
-The generated `src/tindabot/web/effects/` bundle and license notices are included in release artifacts. Regenerate and commit them after changing `frontend/hero.jsx` or its dependencies, before `uv build`. Mobile, reduced-motion, data-saver, and unsupported WebGL clients use the lightweight CSS fallback.
+Commands are checked every minute. A reused command ID can't apply twice, and a wrong version is rejected visibly. To add stock, use **Inventory → Adjust stock** in the workspace. Day-to-day procedures are in the [operations runbook](docs/OPERATIONS.md).
 
-Use `npm`/`npx` on Linux or macOS. The runner starts its own localhost API when needed. Screenshots and accessibility checks cover light/dark themes, mobile layouts, keyboard operation, and loading/error states. See [design audit, tokens, and motion specifications](docs/DESIGN_SYSTEM.md) and the [feature review](docs/FEATURE_REVIEW.md).
+## Documentation
 
-For a paced API/worker load probe, create a separate **empty** PostgreSQL database ending in `_test`, set `LOAD_DATABASE_URL`, then run:
+- [Deployment](docs/DEPLOYMENT.md): Render Blueprint, database and secrets
+- [Operations runbook](docs/OPERATIONS.md): daily use, Sheet tabs, recovery
+- [Release status](docs/RELEASE_STATUS.md) and [production plan](docs/PRODUCTION_PLAN.md): what's left before real orders
+- [Design system](docs/DESIGN_SYSTEM.md): tokens, motion and UI rules
+- [Order journal](docs/ORDER_JOURNAL.md), [delivery recovery](docs/DELIVERY_RECOVERY.md), [handover queue](docs/HANDOVER_QUEUE.md)
+- [Development notes](docs/dev-notes/): the original blueprint, progress log and past reviews
 
-```powershell
-uv run python scripts/load_probe.py --seconds 600 --rate 10 --output docs/validation/local-load.json
-```
+## Known limits
 
-The probe starts localhost-only processes and forces dry-run providers. Its measurements cover internal intake/processing, not real Messenger delivery or hosted infrastructure. `uv run python scripts/validate_deploy.py` independently checks the Render YAML against the provider's published schema without provisioning anything.
-
-The first [local load report](docs/validation/local-load.json) records 6,000 events over ten minutes, zero HTTP errors, and 32 ms p95 webhook acknowledgement. Repeat on staging with the intended provider configuration before public launch.
-
-## Connect a test Page and Sheet
-
-1. Configure a test Meta app/Page, secret, verification token, Page token, app ID, and a currently supported Graph API version. Keep secrets in `.env` or the host secret store.
-2. Expose the local API through an HTTPS development tunnel. Register `/webhook` and subscribe the Page to the messaging/postback/echo events supported by the chosen API version. Verify real payloads against the parser.
-3. Create a Google service account and share only the intended spreadsheet with it. Put its base64-encoded JSON in `GOOGLE_SERVICE_ACCOUNT_JSON_B64`. Base64 is transport encoding, not encryption.
-4. Run `uv run tindabot setup-sheet` to create missing tabs. It preserves existing tabs. Populate Products and FAQ, then restrict sharing and protect system columns.
-5. Configure SMTP with TLS and a suitable sender account. Set `DELIVERY_MODE=live` only when the integrations are configured and you intend the application to send messages during your test.
-6. Run `uv run tindabot setup-profile`, then test browsing, checkout, duplicate delivery, tracking, and seller takeover on the Page.
-
-`setup-sheet` and `setup-profile` change external resources when explicitly invoked. Neither was run against a real account during implementation.
-
-## Seller workflow
-
-| Tab | Editable fields | Behavior |
-|---|---|---|
-| Products | `sku,name,price,stock,active,image_url` | `price` is PHP with up to two decimal places. `stock` initializes **new SKUs only**. Refreshing an existing SKU never replenishes sold stock. |
-| FAQ | `keywords,answer` | Comma-separated whole words/phrases; ordered deterministic matching, no free-form AI. |
-| Orders | None | Worker-owned projection, protected against manual changes. DB remains authoritative. `created_at_manila` shows Manila time and `total_php` shows pesos. Older tabs with `created_at`/`total_minor` headers are renamed automatically on the next export; rows written before that keep their raw values. |
-| Commands | `command_id,order_id,expected_version,action` | Append a unique command ID; copy order ID/version from Orders; use `confirmed`, `paid`, `shipped`, `delivered`, `cancelled`, `pause`, or `resume`. Worker writes `result`. |
-
-Commands are reconciled every minute. Reusing a command ID cannot apply another order transition. Incorrect versions or invalid transitions are rejected visibly. Use a **new command ID** after correcting a rejected command. Do not edit an accepted command row.
-
-Catalog/payment settings such as shipping, pickup address, and payment instructions live in environment configuration for this release. Changing them requires redeployment; checkout reconfirms changed quotes. Inventory replenishment uses **Inventory → Adjust stock** in the authenticated workspace, or `/admin/stock` with a unique adjustment ID. Positive values add stock; negative values remove it.
-
-Seller replies from another application or an unrecognized Page sender conservatively pause the bot. Own sends are identified by app ID and returned message ID. Verify this on the actual Page before launch. `MENU` explicitly returns the customer to the bot; there is no automatic timeout resume.
-
-The Commands `pause`/`resume` actions identify conversations through an existing order. For pre-order inquiries, use the Page inbox reply takeover or the operator endpoint. Exact seller identity cannot be reliably inferred from an absent echo field, so unknown Page sends intentionally cause a pause.
-
-## Deployment
-
-The checked-in [Render Blueprint](render.yaml) describes a paid API and worker sharing an externally supplied PostgreSQL database. It does not provision a Supabase project. Configure the `tindabot-production` environment group before applying it; paid service selection and region must fit the seller's budget and data requirements.
-
-Deploy the API first so its coordinated pre-deploy migration completes, then the compatible worker revision. Production startup rejects SQLite, missing live integration settings, weak/equal admin credentials, absent HTTPS privacy URL, and an unacknowledged production configuration. Disable public API docs and access logging; keep webhook URLs and bearer tokens out of logs.
-
-Use a direct or session-pooled database connection with `sslmode=require` or stronger validation. The runtime currently uses normal psycopg prepared statements; **transaction-pooler URLs are not supported by this release configuration**. The database application role needs access only to these tables and sequences. Migrations revoke table/sequence access from Supabase's `anon` and `authenticated` roles when those roles exist.
-
-Render supports a pre-deploy migration step on paid services; Supabase distinguishes session and transaction pooling. [Render deploy lifecycle](https://render.com/docs/deploys), [Supabase connections](https://supabase.com/docs/guides/database/connecting-to-postgres).
-
-Shared-group secrets must be entered manually before deployment: Render ignores `sync: false` variables inside environment groups. The Blueprint therefore declares only non-secret shared defaults and preserves separately configured secrets. [Render Blueprint environment groups](https://render.com/docs/blueprint-spec#environment-groups).
-
-Follow the [deployment handoff](docs/DEPLOYMENT.md), [operations runbook](docs/OPERATIONS.md), and [launch checklist](docs/RELEASE_STATUS.md) before routing public orders.
-
-## Important operational limits
-
-- PostgreSQL ensures one committed order per checkout. External messaging, email, and Sheet writes cannot share that transaction. Ambiguous Messenger/SMTP results require operator reconciliation; automatically retrying them could duplicate a notification.
-- Sheets have no uniqueness constraint or transactional editing contract. Exports are serialized and reconcile by order ID; duplicate rows stop delivery for review. A single production worker is the supported initial deployment. A Sheets operation extending beyond its lease requires reconciliation; multi-worker outbound scaling is not yet release-qualified.
-- A reply already in flight when a seller pauses cannot be recalled. New replies are checked immediately before dispatch.
-- Personal-field erasure removes controlled name/phone/address/message copies and queues Sheet cleanup. Restricted PSID/order association metadata remains for accounting and suppression. This is not complete identity unlinking or deletion from Meta, seller email, or historical backups.
-- Order updates are opt-in and sent only within Messenger's 24-hour window after the customer's last message; older conversations are skipped because Meta retired the post-purchase message tag. Updates never reach a customer who sent STOP or whose data was erased.
-- Payment screenshots, broadcast or marketing messages, full identity unlinking, multi-Page service, AI answers, and courier integrations are not implemented.
+- One Facebook Page and one worker per deployment
+- Messages, emails and Sheet writes can't share the database transaction, so an unconfirmed send needs the seller to check it
+- Order updates go out only within Messenger's 24-hour window after the customer's last message
+- Not included: payment screenshots, broadcasts, courier integrations, AI answers

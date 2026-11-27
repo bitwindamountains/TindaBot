@@ -2,7 +2,7 @@
 
 Deterministic Messenger ordering service for one Facebook Page: FAQ replies, product carousel, guided checkout, order tracking, seller handover, PostgreSQL inventory, Google Sheets operations, and a same-origin seller workspace at `/`. No AI answers, by design.
 
-Product context: `PRODUCT.md`. Original spec: `03_TindaBot_Blueprint.md` (the code has moved past parts of it; see `docs/RELEASE_STATUS.md`). Current state and next steps: `PROGRESS.md`.
+Product context: `PRODUCT.md`. Original spec: `docs/dev-notes/blueprint.md` (the code has moved past parts of it; see `docs/RELEASE_STATUS.md`). Current state and next steps: `docs/dev-notes/PROGRESS.md`.
 
 ## Commands (Windows workspace)
 

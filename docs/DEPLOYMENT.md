@@ -1,6 +1,6 @@
 # Deployment handoff
 
-Reviewed 8 October 2026. This is a locally verified release candidate for staging deployment. Hosting, live provider acceptance, and public launch have not been performed. See the [deployment readiness review](DEPLOYMENT_REVIEW.md) for current evidence and release blockers.
+Reviewed 8 October 2026. This is a locally verified release candidate for staging deployment. Hosting, live provider acceptance, and public launch have not been performed. See the [deployment readiness review](dev-notes/reviews/DEPLOYMENT_REVIEW.md) for current evidence and release blockers.
 
 ## Release contents
 

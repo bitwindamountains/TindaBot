@@ -1,7 +1,7 @@
 # TindaBot production review and implementation plan
 
 Reviewed: 2 October 2026  
-Baseline: [03_TindaBot_Blueprint.md](../03_TindaBot_Blueprint.md), version 1.0  
+Baseline: [the original blueprint](dev-notes/blueprint.md), version 1.0  
 Status: design reviewed; implementation and production validation have not started.
 
 ## 1. Assessment and scope

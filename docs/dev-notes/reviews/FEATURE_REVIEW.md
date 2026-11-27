@@ -4,11 +4,11 @@ Reviewed 7 October 2026. Scope: the seller workspace and the API contracts it us
 
 Updated 8 October: the four checkpoint findings are fixed; see [resolution and regression evidence](FOLLOW_UP_REVIEW.md). All-time order search, cursor pagination, complete connected CSV exports and tab-memory navigation context are now included.
 
-The order journal increment is implemented: [private order notes, activity history and external-refund reconciliation](ORDER_JOURNAL.md), including partial refunds, version checks, idempotent retries and privacy scrubbing.
+The order journal increment is implemented: [private order notes, activity history and external-refund reconciliation](../../ORDER_JOURNAL.md), including partial refunds, version checks, idempotent retries and privacy scrubbing.
 
-Delivery recovery is now implemented: [protected inspection, safe retry/suppression and audit records](DELIVERY_RECOVERY.md).
+Delivery recovery is now implemented: [protected inspection, safe retry/suppression and audit records](../../DELIVERY_RECOVERY.md).
 
-The next small increment is implemented: [human handover queue](HANDOVER_QUEUE.md), with waiting counts, customer last-contact times, a Page inbox link and explicit version-checked resume. Pre-existing unmarked pauses are not backfilled; see its rollout limits. A subsequent [handover review](HANDOVER_REVIEW.md) fixed STOP reason loss, resume past pending activity and misleading post-save refresh errors.
+The next small increment is implemented: [human handover queue](../../HANDOVER_QUEUE.md), with waiting counts, customer last-contact times, a Page inbox link and explicit version-checked resume. Pre-existing unmarked pauses are not backfilled; see its rollout limits. A subsequent [handover review](HANDOVER_REVIEW.md) fixed STOP reason loss, resume past pending activity and misleading post-save refresh errors.
 
 ## Changes completed
 

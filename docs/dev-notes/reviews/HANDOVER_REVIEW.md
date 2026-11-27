@@ -10,4 +10,4 @@ Reviewed 8 October 2026 against checkpoint `786a1bd`. Scope: handover creation, 
 
 Existing documented limits remain: pre-update unmarked pauses are not backfilled; the external link opens the Page inbox rather than a verified individual thread; live Meta account acceptance is outstanding. This review does not certify the entire application or its external integrations.
 
-Validation: [full backend run](validation/handover-review-backend-tests.xml), [targeted browser regressions](validation/handover-review-browser-tests.json), [full browser suite](validation/ui-tests.json) and [installed-package smoke](validation/release-smoke.json).
+Validation: [full backend run](../../validation/handover-review-backend-tests.xml), [targeted browser regressions](../../validation/handover-review-browser-tests.json), [full browser suite](../../validation/ui-tests.json) and [installed-package smoke](../../validation/release-smoke.json).

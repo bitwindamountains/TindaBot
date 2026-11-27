@@ -45,7 +45,7 @@ Verified live after the redeploy: health and auth gates, multi-item cart, which-
 | Release review | Fixed: handover false positives, sizes read as quantities, compound Tagalog numbers, blank FAQ rows, updates after STOP, test-chat resource exhaustion, status-token notes, blocked reply lanes | `482ccfa`, `5949d71` |
 | Cleanup and docs | Retired post-purchase tag path removed (updates only within 24h, sent as `UPDATE`); old Sheet headers upgraded in place; README, release status, deployment handoff updated | `68433de` |
 
-Plan for the automation work: `docs/ideas/automation-teaching-loop.md` (steps 1–4 built).
+Plan for the automation work: `docs/dev-notes/ideas/automation-teaching-loop.md` (steps 1–4 built).
 
 ## Next steps (owner: you)
 
